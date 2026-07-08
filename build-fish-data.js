@@ -195,7 +195,7 @@ const byArea = fish.reduce((acc, item) => {
   return acc;
 }, {});
 
-fs.writeFileSync("data.js", `const FISH_DATA = ${JSON.stringify(fish, null, 2)};\n`);
+fs.writeFileSync("public/data.js", `const FISH_DATA = ${JSON.stringify(fish, null, 2)};\n`);
 
 console.log(`total ${fish.length}`);
 console.log(JSON.stringify(byArea, null, 2));
