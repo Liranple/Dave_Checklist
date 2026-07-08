@@ -64,18 +64,200 @@ body {
   user-select: text;
 }
 
+/* ===== 사이드바 레이아웃 (물고기 / 요리 / 초밥 탭) ===== */
+.app-layout {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100vh;
+}
+
+/* 모든 탭 하단 공통 푸터 (비공식 안내 · 저작권 · 출처) */
+.site-footer {
+  margin-top: 10px;
+  padding: 24px 16px 32px;
+  border-top: 1px solid var(--line);
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.site-footer p {
+  margin: 3px 0;
+}
+
+.site-footer .footer-title {
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+
+.site-footer .footer-sub {
+  opacity: 0.8;
+  font-size: 11px;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  flex: 0 0 auto;
+  width: 132px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 12px;
+  background: linear-gradient(180deg, rgba(11, 32, 44, 0.92), rgba(7, 19, 27, 0.92));
+  border-right: 1px solid var(--line);
+  backdrop-filter: blur(14px);
+  z-index: 6;
+}
+
+/* 사이드바 상단 로고: 다이빙 마스크 아이콘 + 워드마크 */
+.sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 16px;
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  font-size: 24px;
+  background: linear-gradient(
+    145deg,
+    rgba(82, 211, 255, 0.22),
+    rgba(82, 211, 255, 0.05)
+  );
+  border: 1px solid rgba(82, 211, 255, 0.35);
+  box-shadow: 0 4px 14px rgba(82, 211, 255, 0.18);
+}
+
+.sidebar-logo-text {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  color: var(--muted);
+}
+
+.side-tab {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.side-tab:hover {
+  color: var(--text);
+  background: rgba(82, 211, 255, 0.08);
+  border-color: var(--line);
+  transform: none;
+}
+
+.side-tab.active {
+  color: var(--text);
+  background: rgba(82, 211, 255, 0.14);
+  border-color: rgba(82, 211, 255, 0.45);
+  box-shadow: 0 0 0 1px rgba(82, 211, 255, 0.2) inset;
+}
+
+.side-tab-ico {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.side-tab-label {
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+/* 좁은 화면: 사이드바를 화면 '하단'에 고정된 가로 바로 전환 */
+@media (max-width: 620px) {
+  .sidebar {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: auto;
+    height: auto;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 6px;
+    padding: 6px 8px;
+    border-right: none;
+    border-top: 1px solid var(--line);
+    z-index: 45;
+  }
+
+  .sidebar-brand {
+    display: none;
+  }
+
+  .side-tab {
+    flex: 1;
+    flex-direction: row;
+    justify-content: center;
+    gap: 6px;
+    padding: 9px;
+  }
+
+  .side-tab-ico {
+    font-size: 18px;
+  }
+
+  /* 하단 바에서 로그인 버튼은 컴팩트하게(맨 아래로 밀지 않음).
+     기본 `.auth-btn{width:100%}`(소스상 뒤에 위치)를 확실히 이기도록 명시도를 높인다. */
+  .sidebar .auth-btn {
+    margin-top: 0;
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  /* 고정 하단 바에 콘텐츠(푸터 포함)가 가리지 않게 여백 확보 */
+  .content {
+    padding-bottom: 64px;
+  }
+}
+
 header {
   position: sticky;
   top: 0;
-  z-index: 5;
+  /* 카드/드롭다운(최대 25~30)보다 위, 모달(80)보다 아래. 스크롤 시 카드가 헤더를 뚫지 않게. */
+  z-index: 40;
   background:
     radial-gradient(
       120% 140% at 50% -40%,
       rgba(82, 211, 255, 0.16),
       transparent 60%
     ),
-    linear-gradient(180deg, rgba(11, 32, 44, 0.92), rgba(7, 19, 27, 0.9));
-  backdrop-filter: blur(14px);
+    /* 불투명 배경 → 뒤 카드가 비쳐 보이지 않는다 */
+    linear-gradient(180deg, #0c2130, #071219);
   padding: 26px 12px 22px;
 }
 
@@ -102,10 +284,9 @@ header::after {
 }
 
 .header-top {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 8px;
   margin-bottom: 22px;
 }
 
@@ -121,14 +302,7 @@ header::after {
 .brand-title {
   display: flex;
   align-items: center;
-  gap: 13px;
-}
-
-.brand-mark {
-  font-size: 32px;
-  line-height: 1;
-  filter: drop-shadow(0 3px 10px rgba(82, 211, 255, 0.45));
-  transform: translateY(1px);
+  justify-content: center;
 }
 
 h1 {
@@ -172,10 +346,10 @@ h1 {
   transform: scaleX(-1);
 }
 
+/* 로그인 버튼: 사이드바 맨 아래에 붙는다(margin-top:auto가 남는 공간을 밀어냄). */
 .auth-btn {
-  grid-column: 3;
-  justify-self: end;
-  min-width: 100px;
+  margin-top: auto;
+  width: 100%;
   border-color: rgba(82, 211, 255, 0.4);
   background: linear-gradient(
     135deg,
@@ -207,7 +381,7 @@ h1 {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(180px, 260px) auto auto auto;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 260px) auto auto;
   gap: 10px;
   align-items: center;
 }
@@ -376,6 +550,10 @@ main {
   width: min(1536px, 100%);
   margin: 0 auto;
   padding: 18px 12px 32px;
+  /* 그리드 열 수를 뷰포트가 아닌 '실제 콘텐츠 폭'(사이드바 제외)에 맞춰 정하기 위한
+     컨테이너. 사이드바 유무·폭과 무관하게 카드가 알맞게 배치된다. */
+  container-type: inline-size;
+  container-name: gridwrap;
 }
 
 .summary {
@@ -535,13 +713,18 @@ summary b {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(290px, 1fr));
+  /* 물고기 카드는 최소 288.4px 유지. 남는 폭에 맞춰 열 수를 자동 조절하고, 그 아래로는
+     카드가 줄어들지 않고 열 수가 줄어든다. min(288.4px,100%)로 초저폭에서 넘침 방지,
+     auto-fill이라 항목이 적은 섹션에서도 카드가 커지지 않는다. */
+  grid-template-columns: repeat(auto-fill, minmax(min(288.4px, 100%), 1fr));
   gap: 10px;
 }
 
 .card {
   position: relative;
-  min-width: 290px;
+  /* 그리드 트랙이 폭을 결정하도록 최소폭 하한을 풀어 오른쪽 넘침을 막는다.
+     좁은 화면은 아래 반응형에서 열 수를 줄여 대응한다. */
+  min-width: 0;
   min-height: 102px;
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr);
@@ -568,12 +751,193 @@ summary b {
 .card:hover {
   border-color: var(--line-strong);
   box-shadow: var(--shadow);
-  transform: translateY(-2px);
   z-index: 3;
+}
+
+/* 카드 안 버튼은 클릭 시 재렌더되므로 hover 상승 효과를 빼서 들썩임을 없앤다. */
+.card .rank-trigger:hover,
+.card .tank-toggle:hover {
+  transform: none;
 }
 
 .card.rank-open {
   z-index: 20;
+}
+
+/* 요리 목록(드롭다운)이 열린 물고기 카드 강조 + 드롭다운이 아래 카드 위로 겹치게 */
+.card.dish-open {
+  border-color: var(--accent);
+  box-shadow: var(--shadow);
+  z-index: 25;
+}
+
+/* 요리/초밥에서 이동해 왔을 때 잠깐 점등(2번 깜빡이고 멈춤) */
+@keyframes cardFlash {
+  0% { box-shadow: 0 0 0 0 rgba(82, 211, 255, 0); }
+  15% { box-shadow: 0 0 0 4px rgba(82, 211, 255, 0.7); }
+  40% { box-shadow: 0 0 0 0 rgba(82, 211, 255, 0); }
+  55% { box-shadow: 0 0 0 4px rgba(82, 211, 255, 0.7); }
+  100% { box-shadow: 0 0 0 0 rgba(82, 211, 255, 0); }
+}
+
+.card.flash {
+  animation: cardFlash 1.4s ease-out;
+  border-color: var(--accent);
+  z-index: 6;
+}
+
+/* 물고기 카드 클릭 시 카드 아래로 펼쳐지는 "이 물고기로 만드는 요리/초밥" 드롭다운 */
+.dish-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid rgba(82, 211, 255, 0.32);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #0b1d28, #06121a);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.45);
+  cursor: default;
+  /* 박스는 빠르게 페이드, 항목은 아래에서 계단식(주르륵)으로 등장 */
+  animation: dishBoxIn 0.13s ease;
+}
+
+@keyframes dishBoxIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 드롭다운 항목: 위에서부터 순차(stagger)로 나타난다. 각 항목 속도는 동일하고
+   시작 시점만 조금씩 늦춰(animation-delay는 JS에서 부여) 주르륵 흘러나오는 느낌. */
+.dish-chip,
+.dish-dropdown--info .info-row {
+  animation: dishItemIn 0.24s cubic-bezier(0.2, 0, 0.15, 1) both;
+}
+
+@keyframes dishItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dish-chip {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 0;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.dish-chip:hover {
+  background: rgba(82, 211, 255, 0.12);
+  border-color: var(--line);
+  transform: none;
+}
+
+.dish-chip-ico {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 6px;
+  background: rgba(6, 16, 21, 0.85);
+  font-size: 15px;
+  color: var(--muted);
+}
+
+/* 박스 크기는 그대로, 안의 이미지만 살짝 작게(박스 안에 여백을 둔다) */
+.dish-chip-ico img {
+  width: 90%;
+  height: 90%;
+  object-fit: contain;
+}
+
+.dish-chip-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.dish-empty {
+  padding: 12px 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* 요리 정보 드롭다운(해금조건·장인의 불꽃). 툴팁이 잘리지 않게 overflow는 보임.
+   행 사이 gap을 없애고 각 행의 상하 여백만으로 구분선을 위아래 대칭으로 맞춘다. */
+.dish-dropdown--info {
+  overflow: visible;
+  gap: 0;
+  padding: 2px 8px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 4px;
+}
+
+.info-row + .info-row {
+  border-top: 1px solid var(--line);
+}
+
+.info-label {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.info-val {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
+}
+
+.info-flame {
+  color: var(--warn);
+}
+
+/* 요리 카드만 클릭(정보 펼치기) 가능하므로 포인터, 초밥은 기본 커서 */
+.card--recipe {
+  cursor: default;
+}
+
+.card--cook {
+  cursor: pointer;
 }
 
 .card.done {
@@ -614,6 +978,9 @@ summary b {
 .icon img {
   width: 100%;
   height: 100%;
+  /* 물고기 이미지는 나무위키 원본을 '머리 쪽 정사각'으로 미리 크롭해 저장하므로
+     정사각 칸에서 contain만으로도 꽉 찬다(정사각=contain이 곧 cover).
+     초밥 이미지는 가로형이라 contain으로 전체가 보이게 유지된다. */
   object-fit: contain;
 }
 
@@ -643,6 +1010,180 @@ summary b {
   white-space: nowrap;
 }
 
+/* ===== 요리/초밥 카드: 밤/낮·아쿠아·보스 없이 랭크만. 4열이라 카드가 넓어
+   재료를 2열로 배치 → 세로가 짧아진다. 재료 영역을 2줄 고정 높이로 잡아
+   카드 높이를 통일한다(재료 최대 4개=2줄). ===== */
+.card--recipe {
+  align-items: stretch;
+  min-height: 112px;
+}
+
+.card--recipe .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+/* 요리·초밥 카드는 card-body가 이미 gap(8px)을 주므로, 랭크 줄의 margin-top(물고기용)을
+   없애 재료↔랭크 사이 여백이 이중으로 벌어지지 않게 한다. */
+.card--recipe .row {
+  margin-top: 0;
+}
+
+/* 초밥은 재료가 1줄뿐이라 카드 높이를 콘텐츠에 맞춰 낮추고, 재료가 늘어나지 않게 해
+   랭크가 재료 바로 아래 붙도록 한다(재료↔랭크 여백 최소화). (초밥 = card--recipe 중 card--cook 아님) */
+.card--recipe:not(.card--cook) {
+  min-height: 0;
+}
+
+.card--recipe:not(.card--cook) .recipe-ingredients {
+  flex: 0 0 auto;
+}
+
+/* 다만 너무 붙지 않게 초밥 랭크에 약간의 간격을 준다(gap 8px + 이 값). */
+.card--recipe:not(.card--cook) .row {
+  margin-top: 6px;
+}
+
+/* 재료 2열 배치. 기본은 '내용 크기(max-content) + 왼쪽 정렬'.
+   (초밥은 이 기본을 그대로 씀 — 재료 1개라 내용맞춤이 자연스럽다) */
+.recipe-ingredients {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, max-content);
+  justify-content: start;
+  gap: 4px 0;
+  flex: 1 1 auto;
+  align-content: start;
+}
+
+/* 요리 탭: 기본은 정가운데 반반(균등 1fr)으로 좌/우 대칭 배치.
+   + 재료 2줄 높이를 확보해 카드 높이를 통일. */
+.card--cook .recipe-ingredients {
+  grid-template-columns: 1fr 1fr;
+  min-height: 36px;
+}
+
+/* 요리 중 긴 재료가 있어 반칸에 잘리는 것만(card--wide) 내용맞춤 열로 되돌린다. */
+.card--cook.card--wide .recipe-ingredients {
+  grid-template-columns: minmax(0, max-content) minmax(0, max-content);
+}
+
+.recipe-ingredients .ing-line {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.3;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* 재료 수량 숫자: 재료명(회색)과 대비되게 밝은 색 + 굵게로 강조(크기·여백은 그대로). */
+.recipe-ingredients .ing-qty {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+/* 한 줄에 재료 2개(좌=홀수번째, 우=짝수번째)일 때 그 사이 구분선.
+   얇은 직선 + 위아래로 자연스러운 투명 페이드(고급스러운 느낌).
+   ::before는 absolute라 카드 높이·글자 간격에는 영향 없음(페이드로 짧아 보여 길이는 넉넉히). */
+.recipe-ingredients .ing-line:nth-child(odd) {
+  padding-right: 13px;
+}
+
+.recipe-ingredients .ing-line:nth-child(even) {
+  position: relative;
+  padding-left: 17px;
+}
+
+.recipe-ingredients .ing-line:nth-child(even)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 1px;
+  height: 22px;
+  border-radius: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(163, 201, 216, 0) 0%,
+    rgba(163, 201, 216, 0.85) 34%,
+    rgba(163, 201, 216, 0.85) 66%,
+    rgba(163, 201, 216, 0) 100%
+  );
+}
+
+/* 위·아래 두 줄 모두 구분선이 있는 경우(재료 4개)엔 하나의 연속된 선으로.
+   위 칸(2번째) 선을 두 줄 전체로 늘리고, 아래 칸(4번째) 선은 숨긴다.
+   페이드는 위아래 끝(연장부)에만 두어 두 텍스트 줄 옆은 진하게 유지. */
+.recipe-ingredients:has(.ing-line:nth-child(4)) .ing-line:nth-child(2)::before {
+  top: -3px;
+  transform: translateX(-50%);
+  height: 42px;
+  background: linear-gradient(
+    180deg,
+    rgba(163, 201, 216, 0) 0%,
+    rgba(163, 201, 216, 0.85) 22%,
+    rgba(163, 201, 216, 0.85) 78%,
+    rgba(163, 201, 216, 0) 100%
+  );
+}
+
+.recipe-ingredients:has(.ing-line:nth-child(4)) .ing-line:nth-child(4)::before {
+  display: none;
+}
+
+
+/* 요리/초밥 카드는 최소 363px 유지(재료 2열이 잘리지 않게). 열 수는 자동 조절.
+   .grid.grid--recipe(0,2,0)로 일반 .grid 규칙(0,1,0)을 확실히 덮는다. */
+.grid.grid--recipe {
+  grid-template-columns: repeat(auto-fill, minmax(min(363px, 100%), 1fr));
+}
+
+.card--placeholder {
+  cursor: default;
+}
+
+.card--placeholder:hover {
+  transform: none;
+  border-color: var(--line);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
+}
+
+/* 실데이터 전까지 자리만 잡는 스켈레톤 바 */
+.skeleton-line {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(151, 191, 207, 0.12),
+    rgba(151, 191, 207, 0.22),
+    rgba(151, 191, 207, 0.12)
+  );
+}
+
+.card--recipe .name.skeleton-line {
+  height: 16px;
+  width: 62%;
+}
+
+.recipe-ingredients .ing-line.skeleton-line {
+  width: 90%;
+}
+
+.recipe-ingredients .ing-line.skeleton-line:nth-child(2) {
+  width: 72%;
+}
+
+.recipe-ingredients .ing-line.skeleton-line:nth-child(3) {
+  width: 82%;
+}
+
+.icon.skeleton-box {
+  background: rgba(151, 191, 207, 0.1);
+}
+
 .time-badge {
   position: absolute;
   top: 0;
@@ -657,6 +1198,13 @@ summary b {
   color: #d9edf8;
   font-size: 12px;
   line-height: 1;
+}
+
+/* 시간대 아이콘: SVG를 배지 중앙에 정확히 정렬. 원의 ~80%를 채운다. */
+.time-badge .time-ico {
+  width: 15px;
+  height: 15px;
+  display: block;
 }
 
 .time-day {
@@ -675,6 +1223,30 @@ summary b {
   background: rgba(82, 211, 255, 0.14);
   border-color: rgba(82, 211, 255, 0.24);
   color: #d8f8ff;
+}
+
+/* 낮·밤 배지는 클릭 필터라서 버튼 기본/전역 button 스타일을 지운다.
+   특히 전역 button의 min-height:40px, font-size:14px, padding 을 되돌려
+   배지 크기(20px)가 커지지 않게 한다. */
+button.time-badge {
+  appearance: none;
+  -webkit-appearance: none;
+  min-height: 0;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+}
+
+/* hover 시 크기 변동(전역 button의 translateY, 이전 scale)이 없도록 고정. */
+button.time-badge:hover {
+  transform: none;
+}
+
+/* 필터가 켜진 시간대 배지: 링을 둘러 현재 어떤 시간대만 보고 있는지 표시. */
+.time-badge.time-filter.active {
+  box-shadow: 0 0 0 2px currentColor, 0 0 9px -2px currentColor;
 }
 
 .row {
@@ -785,7 +1357,7 @@ summary b {
 }
 
 .boss-badge {
-  min-width: 48px;
+  min-width: 58px;
   height: 24px;
   display: inline-flex;
   align-items: center;
@@ -802,6 +1374,102 @@ summary b {
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+/* 관련 파티 배지: 랭크 옆에, 보스 배지처럼. 색은 --pc(파티별 색)로 결정. */
+.party-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  min-height: 0; /* 전역 button min-height 무력화 */
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--pc) 55%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pc) 15%, transparent);
+  color: var(--pc);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.party-badge:hover {
+  background: color-mix(in srgb, var(--pc) 24%, transparent);
+  border-color: color-mix(in srgb, var(--pc) 75%, transparent);
+  transform: none; /* 전역 button:hover의 위로 뜨는 효과 제거(들썩임 방지) */
+}
+
+/* 선택된 파티 필터: 색을 진하게 채워 활성 상태를 강조 */
+.party-badge.active {
+  background: color-mix(in srgb, var(--pc) 34%, transparent);
+  border-color: var(--pc);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pc) 45%, transparent) inset;
+}
+
+/* 추가 출현 지역 배지: 원 안에 ! 아이콘. 호버/포커스 시 툴팁으로 지역·시간대 표시. */
+.also-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--warn);
+  cursor: help;
+  outline: none;
+}
+
+.also-ico {
+  width: 19px;
+  height: 19px;
+  display: block;
+}
+
+.also-badge:hover .also-ico,
+.also-badge:focus-visible .also-ico {
+  filter: drop-shadow(0 0 6px rgba(255, 209, 102, 0.6));
+}
+
+.also-tip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: -6px;
+  z-index: 30;
+  min-width: 150px;
+  white-space: nowrap;
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface-3);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: default;
+}
+
+.also-tip b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.also-tip span {
+  display: block;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.also-badge:hover .also-tip,
+.also-badge:focus .also-tip,
+.also-badge:focus-within .also-tip {
+  display: block;
 }
 
 .tank-toggle {
@@ -924,6 +1592,30 @@ summary b {
   line-height: 1.5;
 }
 
+/* 초기화 대상 목록: 항목마다 한 줄 띄우고, 앞에 큼직한 가운데 점 */
+.reset-list {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.reset-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.reset-list li::before {
+  content: "·";
+  font-size: 30px;
+  line-height: 0;
+  color: var(--accent);
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -982,7 +1674,8 @@ summary b {
   white-space: normal;
 }
 
-@media (max-width: 860px) {
+/* 툴바(검색/필터)도 사이드바만큼 브레이크포인트를 올린다(콘텐츠 폭 ~857px 지점). */
+@media (max-width: 990px) {
   .toolbar {
     grid-template-columns: 1fr 1fr;
   }
@@ -992,35 +1685,17 @@ summary b {
   }
 }
 
-@media (max-width: 1529px) {
-  .grid {
-    grid-template-columns: repeat(4, minmax(290px, 1fr));
-  }
-}
+/* 물고기/요리 그리드 열 수는 컨테이너 쿼리(gridwrap)로 처리한다. 여기선 헤더/툴바만. */
 
-@media (max-width: 1239px) {
-  .grid {
-    grid-template-columns: repeat(3, minmax(290px, 1fr));
-  }
-}
-
-@media (max-width: 949px) {
-  .grid {
-    grid-template-columns: repeat(2, minmax(290px, 1fr));
-  }
-}
-
-@media (max-width: 620px) {
+/* 타이틀이 두 줄로 접히는 것을 막기 위해 작은 헤더로 전환. 사이드바(132px)가 콘텐츠
+   폭을 줄이므로 뷰포트 기준 브레이크포인트를 그만큼 올린다(콘텐츠 폭 ~697px 지점). */
+@media (max-width: 830px) {
   header {
     padding: 14px 12px;
   }
 
   h1 {
     font-size: 27px;
-  }
-
-  .brand-mark {
-    font-size: 24px;
   }
 
   .brand-sub {
@@ -1032,25 +1707,22 @@ summary b {
   .brand-sub::after {
     width: 16px;
   }
+}
 
-  .auth-btn {
-    min-width: 84px;
-  }
-
+@media (max-width: 620px) {
   main {
     padding: 14px 12px 28px;
-  }
-
-  .summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   summary {
     align-items: flex-start;
     font-size: 25px;
   }
+}
 
-  .grid {
-    grid-template-columns: 1fr;
+/* 요약(전체/완료/미완료/진행률)도 콘텐츠 폭 기준: 좁으면 2열 */
+@container gridwrap (max-width: 520px) {
+  .summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

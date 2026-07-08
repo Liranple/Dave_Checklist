@@ -3,6 +3,11 @@ import { doc, getDoc, getFirestore, onSnapshot, setDoc } from "firebase/firestor
 import { firebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
 
 const FISH_DATA = window.FISH_DATA || [];
+// 초밥 데이터: 물고기와 동일한 형태(category/area/name/rank)라 상태·랭크·동기화 로직을 그대로 재사용한다.
+// area는 재료 물고기가 속한 물고기 페이지 섹션과 동일하게 배정돼 있다(초밥은 그 섹션에 들어감).
+const SUSHI_DATA = window.SUSHI_DATA || [];
+// 요리 데이터: 초밥과 동일 구조(category/area/name/ing/rank/icon). area = 요리 섹션명.
+const COOK_DATA = window.COOK_DATA || [];
 const RANKS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "MAX"];
 // ⚠️ 이 두 상수는 절대 바꾸지 말 것.
 // 값을 바꾸면 기존 사용자의 localStorage 데이터(진행 기록)와 저장된 Sync Key가
@@ -10,10 +15,24 @@ const RANKS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "MAX"];
 const STORE_KEY = "dave_checklist_v2";
 const SYNC_KEY_STORAGE = "dave_checklist_sync_key";
 
+// 아이콘은 유니코드 글자 대신 SVG로(글자마다 세로 정렬이 달라 배지 안에서 안 맞던 문제 해결).
+// 모두 24x24 뷰박스 중앙에 그려 원 안에 정확히 가운데 정렬된다. currentColor로 배지 색 상속.
 const ACTIVE_TIME_META = {
-  day: { icon: "\u2600", label: "낮" },
-  night: { icon: "\u263D", label: "밤" },
-  always: { icon: "\u25D0", label: "항상" }, // \u25D0 낮·밤 합체 = 항상
+  day: {
+    icon:
+      '<svg class="time-ico" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="12" cy="12" r="4.4" fill="currentColor" stroke="none"></circle><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.4 4.4l2.1 2.1M17.5 17.5l2.1 2.1M19.6 4.4l-2.1 2.1M6.5 17.5l-2.1 2.1"></path></g></svg>',
+    label: "낮",
+  },
+  night: {
+    icon:
+      '<svg class="time-ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.5 1.8a10.5 10.5 0 1 0 5.7 12.9A8.4 8.4 0 0 1 16.5 1.8z"></path></svg>',
+    label: "밤",
+  },
+  always: {
+    icon:
+      '<svg class="time-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.3" fill="none" stroke="currentColor" stroke-width="2.1"></circle><path fill="currentColor" d="M12 1.7a10.3 10.3 0 0 1 0 20.6z"></path></svg>',
+    label: "항상",
+  },
 };
 
 const AREA_ALL_VALUE = "";
@@ -26,7 +45,15 @@ let stateModifiedAt = localStore.modifiedAt;
 // 현재 로컬 state가 어느 Sync Key에 속한 데이터인지 추적 (""=로컬 전용, 아직 동기화 안 됨).
 // 키를 바꿔 연결할 때 서로 다른 키의 데이터가 섞이는 것을 막는 데 사용.
 let stateOwnerKey = localStore.ownerKey;
-let filters = { q: "", area: "", todo: false, notMax: false };
+let filters = { q: "", area: "", notMax: false, activeTime: "", party: "" };
+// 사이드바 탭: "fish"(물고기) | "cook"(요리) | "sushi"(초밥)
+let activeTab = "fish";
+// 물고기 카드 클릭 시 그 아래에 "이 물고기로 만드는 요리/초밥" 목록을 펼친다.
+// 열려 있는 물고기의 키(getFishKey). null이면 닫힘.
+let openDishFishKey = null;
+// 부드러운 휠 스크롤(관성) 애니메이션을 중단하는 함수(아래 IIFE에서 실제 구현을 넣는다).
+// 프로그램적 스크롤(탭 전환/대상 이동) 시 호출해 관성 루프가 되돌리는 것을 막는다.
+let stopWheelScroll = () => {};
 let openRankKey = null;
 let areaMenuOpen = false;
 let resetModalOpen = false;
@@ -109,10 +136,11 @@ function getFishKey(fish) {
   return `${fish.category}::${fish.area}::${fish.name}`;
 }
 
-function getDefaultItem(fish) {
+function getDefaultItem() {
+  // 기본 랭크는 물고기·요리·초밥 모두 "1"(사용자가 직접 올리는 체크리스트이므로).
   return {
     checked: false,
-    rank: fish.rank === "99" ? "9" : fish.rank,
+    rank: "1",
     tank: false,
   };
 }
@@ -141,14 +169,271 @@ function setItem(fish, patch) {
 // 사용자가 직접 "초기화"를 눌렀을 때만 true가 되어 의도된 비우기를 허용한다.
 let allowEmptyRemotePush = false;
 
+// 탭별 표시 이름과, 초기화 시 지워지는 항목 목록(모달에 표시).
+const TAB_NAMES = { fish: "물고기", cook: "요리", sushi: "초밥" };
+const RESET_ITEMS = { fish: ["랭크", "수족관"], cook: ["랭크"], sushi: ["랭크"] };
+
+// 현재 보고 있는 탭(페이지)의 항목만 초기화한다.
 function resetState() {
-  state = {};
+  const keys = new Set(activeDataset().map(getFishKey));
+  Object.keys(state).forEach((k) => {
+    if (keys.has(k)) delete state[k];
+  });
   allowEmptyRemotePush = true;
   persistState({ renderAfter: false });
 }
 
 function getRankLabel(rank) {
   return rank === "MAX" ? "M" : rank;
+}
+
+// 관련 파티 키워드별 색상(파티 테마와 대충 연관). 요리/초밥 카드의 랭크 옆 배지에 사용.
+const PARTY_COLORS = {
+  랍스터: "#ff6a4d",
+  카레: "#eaa32b",
+  해파리: "#c98cff",
+  참치: "#ff5470",
+  새우: "#ff9d6b",
+  오이: "#69c56a",
+  청새치: "#4aa8ff",
+  상어: "#8fa6bb",
+};
+
+// 파티 태그 배지. 클릭하면 그 태그를 가진 요리/초밥만 보이는 필터로 동작한다(낮/밤 배지처럼).
+function partyBadges(list) {
+  if (!list || !list.length) return "";
+  return list
+    .map((kw) => {
+      const active = filters.party === kw;
+      return (
+        `<button type="button" class="party-badge party-filter${active ? " active" : ""}" ` +
+        `data-party="${kw}" aria-pressed="${active}" style="--pc:${PARTY_COLORS[kw] || "#9fb4c2"}">${kw}</button>`
+      );
+    })
+    .join("");
+}
+
+// 재료 중 가장 긴 것의 대략 폭(px, 12px 기준 근사). 반칸(≈112px)을 넘으면
+// 균등 2열(가운데 반반)에서 잘리므로, 그 요리만 내용맞춤(가변) 열로 렌더한다.
+function ingMaxWidth(ing) {
+  const charW = (c) => (/[가-힣]/.test(c) ? 12 : /\d/.test(c) ? 6.5 : c === " " ? 3.5 : 7);
+  return Math.max(
+    ...String(ing)
+      .split("\n")
+      .map((line) => [...line].reduce((sum, c) => sum + charW(c), 0)),
+  );
+}
+
+// 완료 여부: 물고기·요리·초밥 모두 Rank가 MAX면 완료.
+function isDone(entry) {
+  return getItem(entry).rank === "MAX";
+}
+
+// 물고기 이름 → 그 물고기를 재료로 쓰는 요리/초밥 목록. 한 번만 만들어 캐시.
+let _fishDishIndex = null;
+function getFishDishIndex() {
+  if (_fishDishIndex) return _fishDishIndex;
+  const nsp = (x) => String(x).replace(/\s+/g, "");
+  const index = {};
+  const add = (fishName, dish) => {
+    (index[fishName] ||= []).push(dish);
+  };
+  const fishNames = [...new Set(FISH_DATA.map((f) => f.name))].sort(
+    (a, b) => nsp(b).length - nsp(a).length,
+  );
+  const seahorses = fishNames.filter((n) => n.includes("해마"));
+  const seadragons = fishNames.filter((n) => n.includes("해룡"));
+
+  // 요리/초밥 하나를, 재료가 가리키는 물고기(들)에 연결.
+  // 범용 "해마"/"해룡"은 모든 해마/해룡에 연결한다(예: 해마 꼬치구이).
+  const addDish = (ref, dish) => {
+    if (ref === "해마") seahorses.forEach((f) => add(f, dish));
+    else if (ref === "해룡") seadragons.forEach((f) => add(f, dish));
+    else add(ref, dish);
+  };
+
+  // 재료 한 줄 → 물고기 이름(또는 "해마"/"해룡"). 못 찾으면 null.
+  const matchFish = (line) => {
+    const name = line.replace(/\s*\d+$/, "").trim();
+    if (name === "해마" || name === "해룡") return name;
+    const n = nsp(name);
+    // 보스 부위: "<보스명>의 <부위>" → 보스명이 물고기 이름과 같거나 그 끝에 포함
+    // (예: 클라우스 → 백상아리 클라우스, 늑대장어 → 거대늑대장어)
+    const poss = name.match(/^(.+?)의(?:\s|$)/);
+    if (poss) {
+      const owner = nsp(poss[1]);
+      if (owner.length >= 2) {
+        const f = fishNames.find((fn) => nsp(fn) === owner || nsp(fn).endsWith(owner));
+        if (f) return f;
+      }
+    }
+    // 일반: 물고기 이름이 재료의 접두어(부위명은 뒤에 붙음)
+    return fishNames.find((fn) => nsp(fn).length >= 2 && n.startsWith(nsp(fn))) || null;
+  };
+
+  SUSHI_DATA.forEach((s) => {
+    if (s.fish) addDish(s.fish, { name: s.name, icon: s.icon, tab: "sushi", area: s.area, key: getFishKey(s) });
+  });
+  COOK_DATA.forEach((c) => {
+    const refs = new Set();
+    String(c.ing)
+      .split("\n")
+      .forEach((line) => {
+        const m = matchFish(line);
+        if (m) refs.add(m);
+      });
+    const dish = { name: c.name, icon: c.icon, tab: "cook", area: c.area, key: getFishKey(c) };
+    refs.forEach((ref) => addDish(ref, dish));
+  });
+  _fishDishIndex = index;
+  return index;
+}
+
+function removeDishPanel() {
+  const dd = $("app").querySelector(".dish-dropdown");
+  if (dd) {
+    const card = dd.closest(".card");
+    if (card) card.classList.remove("dish-open");
+    dd.remove();
+  }
+}
+
+// 원 안에 ! 아이콘 + 호버 툴팁(참고 문구). 요리 해금조건 옆 등에 쓴다.
+function noteBadge(text) {
+  return (
+    `<span class="also-badge" tabindex="0" aria-label="참고">` +
+    `<svg class="also-ico" viewBox="0 0 20 20" aria-hidden="true">` +
+    `<circle cx="10" cy="10" r="8.3" fill="none" stroke="currentColor" stroke-width="1.6"></circle>` +
+    `<line x1="10" y1="5.4" x2="10" y2="11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></line>` +
+    `<circle cx="10" cy="14.1" r="1.15" fill="currentColor"></circle>` +
+    `</svg>` +
+    `<span class="also-tip">${text}</span></span>`
+  );
+}
+
+// 카드 아래 드롭다운을 붙인다. 물고기(포획)=요리/초밥 목록, 요리=해금조건·장인의 불꽃 정보.
+function attachDishDropdown(key) {
+  removeDishPanel();
+  const card = Array.from($("app").querySelectorAll(".card")).find((c) => c.dataset.key === key);
+  if (!card) return;
+  const category = key.split("::")[0];
+
+  const dd = document.createElement("div");
+  dd.className = "dish-dropdown";
+  dd.addEventListener("click", (event) => event.stopPropagation());
+
+  if (category === "요리") {
+    // 요리: 해금조건 + 필요 장인의 불꽃 (정보만, 상호작용 없음)
+    const cook = COOK_DATA.find((c) => getFishKey(c) === key);
+    if (!cook) return;
+    dd.classList.add("dish-dropdown--info");
+    const rows = [];
+    const delay = () => `style="animation-delay:${(rows.length * 0.05).toFixed(3)}s"`;
+    if (cook.unlock)
+      rows.push(
+        `<div class="info-row" ${delay()}><span class="info-label">해금</span>` +
+          `<span class="info-val">${cook.unlock}${cook.note ? noteBadge(cook.note) : ""}</span></div>`,
+      );
+    if (cook.flame)
+      rows.push(
+        `<div class="info-row" ${delay()}><span class="info-label">장인의 불꽃</span>` +
+          `<span class="info-val info-flame">🔥 ${cook.flame}</span></div>`,
+      );
+    dd.innerHTML = rows.join("") || '<div class="dish-empty">표시할 정보가 없습니다</div>';
+  } else {
+    // 물고기: 이 물고기로 만드는 요리/초밥 목록
+    const fishName = key.split("::").pop();
+    const dishes = getFishDishIndex()[fishName] || [];
+    if (!dishes.length) {
+      dd.innerHTML = '<div class="dish-empty">이 물고기를 재료로 쓰는 요리 · 초밥이 없습니다</div>';
+    } else {
+      dd.innerHTML = dishes
+        .map(
+          (d, i) =>
+            `<button type="button" class="dish-chip" data-tab="${d.tab}" data-key="${d.key}" data-area="${d.area}" style="animation-delay:${(i * 0.04).toFixed(3)}s">` +
+            `<span class="dish-chip-ico">${d.icon ? `<img src="${d.icon}" alt="">` : "?"}</span>` +
+            `<span class="dish-chip-name">${d.name}</span></button>`,
+        )
+        .join("");
+      dd.querySelectorAll(".dish-chip").forEach((chip) => {
+        chip.addEventListener("click", (event) => {
+          event.stopPropagation();
+          navigateToDish(chip.dataset.tab, chip.dataset.key, chip.dataset.area);
+        });
+      });
+    }
+  }
+
+  card.classList.add("dish-open");
+  card.appendChild(dd);
+}
+
+function toggleDishPanel(fishKey) {
+  if (openDishFishKey === fishKey) {
+    openDishFishKey = null;
+    removeDishPanel();
+  } else {
+    openDishFishKey = fishKey;
+    attachDishDropdown(fishKey);
+  }
+}
+
+// 요리/초밥 목록에서 항목 클릭 → 해당 탭으로 이동 + 스크롤 + 잠깐 점등.
+function navigateToDish(tab, key, area) {
+  openDishFishKey = null;
+  if (area) collapsedAreas.delete(area); // 대상 섹션이 접혀 있으면 펼친다
+  // 검색·필터가 걸려 있으면 대상이 가려질 수 있으니 초기화한다.
+  filters.q = "";
+  filters.area = "";
+  filters.notMax = false;
+  filters.party = "";
+  const searchEl = $("search");
+  if (searchEl) searchEl.value = "";
+  $("notMaxOnly").classList.remove("active");
+  removeDishPanel();
+  setActiveTab(tab, false); // 리셋하지 않고 대상 위치로 직접 이동한다
+
+  // 대상 카드를 화면 중앙으로 즉시 이동(상/하단 근처면 가능한 최대까지). 즉시 스크롤이라
+  // 애니메이션 중단 없이 항상 정확히 도달한다.
+  const scrollToTarget = () => {
+    const card = Array.from($("app").querySelectorAll(".card")).find((c) => c.dataset.key === key);
+    if (!card) return null;
+    const rect = card.getBoundingClientRect();
+    const mid = window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
+    const maxY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    window.scrollTo(0, Math.max(0, Math.min(maxY, mid)));
+    stopWheelScroll(); // 관성 스크롤이 되돌리지 않도록 중단
+    return card;
+  };
+
+  // 렌더 후 레이아웃이 안정된 다음(rAF 2번) 스크롤하고, 이미지 로드 등 늦은 변화도 한 번 더 보정.
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      const card = scrollToTarget();
+      if (!card) return;
+      card.classList.remove("flash");
+      void card.offsetWidth; // 애니메이션 재시작용 리플로우
+      card.classList.add("flash");
+      setTimeout(() => card.classList.remove("flash"), 1600);
+      setTimeout(scrollToTarget, 200); // 늦은 레이아웃 변화 보정
+    }),
+  );
+}
+
+// 추가 출현 지역 배지: 원 안에 ! 아이콘(SVG). 호버/포커스 시 추가 지역·시간대를 알려준다.
+// 여러 지역에 나오는 물고기를 지역마다 중복 카드로 넣지 않고 한 카드에 표기하기 위함.
+function alsoInBadge(list) {
+  const lines = list.map((a) => `<span>${a.area} · ${a.time}</span>`).join("");
+  return (
+    `<span class="also-badge" tabindex="0" aria-label="추가 출현 지역">` +
+    `<svg class="also-ico" viewBox="0 0 20 20" aria-hidden="true">` +
+    `<circle cx="10" cy="10" r="8.3" fill="none" stroke="currentColor" stroke-width="1.6"></circle>` +
+    `<line x1="10" y1="5.4" x2="10" y2="11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></line>` +
+    `<circle cx="10" cy="14.1" r="1.15" fill="currentColor"></circle>` +
+    `</svg>` +
+    `<span class="also-tip" role="tooltip"><b>추가 출현</b>${lines}</span>` +
+    `</span>`
+  );
 }
 
 function getAreaLabel(value) {
@@ -182,6 +467,13 @@ function setResetModalOpen(open) {
   resetModalOpen = open;
   $("resetModal").hidden = !open;
   document.body.classList.toggle("modal-open", open);
+  if (open) {
+    // 현재 탭(페이지)에 맞춰 안내 문구와 초기화 항목 목록을 구성한다.
+    $("resetDesc").textContent = `${TAB_NAMES[activeTab] || ""} 페이지의 아래 내용이 모두 초기화 됩니다`;
+    $("resetList").innerHTML = (RESET_ITEMS[activeTab] || [])
+      .map((label) => `<li>${label}</li>`)
+      .join("");
+  }
 }
 
 function setLoginModalOpen(open) {
@@ -201,15 +493,26 @@ function visibleFish() {
     const searchable = `${fish.name} ${fish.eng} ${fish.area} ${fish.category}`.toLowerCase();
     if (filters.q && !searchable.includes(filters.q)) return false;
     if (filters.area && fish.area !== filters.area) return false;
-    if (filters.todo && item.checked) return false;
     if (filters.notMax && item.rank === "MAX") return false;
+    // 시간대 아이콘 필터: "낮"은 낮+항상만, "밤"은 밤+항상만 표시. "항상"은 어디서든 보인다.
+    const time = fish.activeTime || "always";
+    if (filters.activeTime === "day" && !(time === "day" || time === "always")) return false;
+    if (filters.activeTime === "night" && !(time === "night" || time === "always")) return false;
     return true;
   });
 }
 
+function activeDataset() {
+  if (activeTab === "sushi") return SUSHI_DATA;
+  if (activeTab === "cook") return COOK_DATA;
+  if (activeTab === "fish") return FISH_DATA;
+  return [];
+}
+
 function renderSummary() {
-  const total = FISH_DATA.length;
-  const done = FISH_DATA.filter((fish) => getItem(fish).checked).length;
+  const dataset = activeDataset();
+  const total = dataset.length;
+  const done = dataset.filter(isDone).length;
   $("total").textContent = total;
   $("done").textContent = done;
   $("todo").textContent = total - done;
@@ -264,6 +567,191 @@ function toggleArea(area, contentEl) {
   }
 }
 
+function setActiveTab(tab, scrollTop = true) {
+  if (activeTab === tab) return;
+  activeTab = tab;
+  openDishFishKey = null; // 탭을 바꾸면 열려 있던 드롭다운은 닫는다
+  document.querySelectorAll(".side-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  });
+  render();
+  // 스크롤은 문서 전체가 공유되므로 탭을 바꾸면 최상단에서 시작한다.
+  // (단, 특정 요리로 바로 이동할 때는 리셋 없이 대상으로 스크롤한다)
+  if (scrollTop) {
+    window.scrollTo(0, 0);
+    stopWheelScroll(); // 관성 스크롤이 되돌리지 않도록 중단
+  }
+}
+
+// 요리/초밥 탭: 실데이터 전까지 카드 레이아웃(랭크만 + 재료 자리)만 보여주는 스켈레톤.
+function renderPlaceholderTab() {
+  const app = $("app");
+  const SECTIONS = 2;
+  const CARDS = 8;
+
+  const card =
+    '<article class="card card--recipe card--placeholder">' +
+    '<div class="icon skeleton-box"></div>' +
+    '<div class="card-body">' +
+    '<div class="name skeleton-line"></div>' +
+    '<div class="recipe-ingredients">' +
+    '<span class="ing-line skeleton-line"></span>' +
+    '<span class="ing-line skeleton-line"></span>' +
+    '<span class="ing-line skeleton-line"></span>' +
+    "</div>" +
+    '<div class="row">' +
+    '<span class="rank-control"><button type="button" class="rank-trigger" tabindex="-1">Rank 1</button></span>' +
+    "</div>" +
+    "</div>" +
+    "</article>";
+
+  let html = "";
+  for (let s = 0; s < SECTIONS; s++) {
+    html +=
+      '<section class="area"><details open>' +
+      '<summary><span><span class="skeleton-line" style="width:180px;height:20px;display:inline-block"></span></span></summary>' +
+      '<div class="area-content"><div class="grid">' +
+      card.repeat(CARDS) +
+      "</div></div></details></section>";
+  }
+  app.innerHTML = html;
+}
+
+function visibleRecipe(data, applyArea) {
+  return data.filter((r) => {
+    const item = getItem(r);
+    const party = Array.isArray(r.party) ? r.party : [];
+    const searchable = `${r.name} ${r.ing} ${r.area} ${party.join(" ")}`.toLowerCase();
+    if (filters.q && !searchable.includes(filters.q)) return false;
+    if (applyArea && filters.area && r.area !== filters.area) return false;
+    if (filters.notMax && item.rank === "MAX") return false;
+    if (filters.party && !party.includes(filters.party)) return false;
+    return true;
+  });
+}
+
+// 초밥/요리 공용 탭 렌더: 섹션(area)별로 묶어 렌더. 카드는 이미지 + 이름 + 재료 + 랭크만
+// (밤/낮·아쿠아·보스 없음). 재료는 줄바꿈(\n)으로 나뉜 여러 항목을 각 줄로 표시한다
+// (초밥은 보통 1줄, 요리는 여러 줄). 상태/랭크/동기화는 물고기와 같은 저장소를 공유한다.
+// applyArea=true면 상단 지역 필터를 적용(초밥은 섹션이 물고기 지역과 같아 유효).
+function renderRecipeTab(data, emptyMsg, applyArea, modClass) {
+  const app = $("app");
+  const visible = visibleRecipe(data, applyArea);
+  if (!visible.length) {
+    app.innerHTML = `<div class="empty">${emptyMsg}</div>`;
+    return;
+  }
+
+  const byArea = {};
+  visible.forEach((r) => {
+    (byArea[r.area] ||= []).push(r);
+  });
+
+  Object.entries(byArea).forEach(([area, list]) => {
+    const section = document.createElement("section");
+    section.className = "area";
+
+    const areaDone = list.filter(isDone).length;
+    const collapsed = collapsedAreas.has(area);
+    section.innerHTML = `<details open${collapsed ? ' class="collapsed"' : ""}><summary><span>${area}</span><b>${areaDone} / ${list.length}</b></summary><div class="area-content"${collapsed ? ' style="height:0px;overflow:hidden"' : ""}><div class="grid grid--recipe"></div></div></details>`;
+
+    const grid = section.querySelector(".grid");
+    const areaContent = section.querySelector(".area-content");
+
+    section.querySelector("summary").addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleArea(area, areaContent);
+    });
+
+    list.forEach((r) => {
+      const item = getItem(r);
+      const itemKey = getFishKey(r);
+      const isRankOpen = openRankKey === itemKey;
+      const isMaxRank = item.rank === "MAX";
+
+      const card = document.createElement("article");
+      card.className =
+        "card card--recipe" +
+        (modClass ? " " + modClass : "") +
+        (ingMaxWidth(r.ing) > 112 ? " card--wide" : "") +
+        (isDone(r) ? " done" : "") +
+        (isRankOpen ? " rank-open" : "");
+      card.dataset.key = itemKey;
+
+      const rankOptions = RANKS.map((rank) => {
+        const selected = String(item.rank) === rank ? "selected" : "";
+        return `<button type="button" class="rank-option ${selected}" data-rank="${rank}" role="menuitem">${getRankLabel(rank)}</button>`;
+      }).join("");
+
+      const ingLines = String(r.ing)
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          // 끝의 수량 숫자만 따로 감싸 강조(색/굵기)해서 가시성을 높인다.
+          const disp = line.replace(/\s(\d+)$/, ' <span class="ing-qty">$1</span>');
+          return `<span class="ing-line">${disp}</span>`;
+        })
+        .join("");
+
+      card.innerHTML =
+        `<div class="icon">${r.icon ? `<img src="${r.icon}" alt="">` : "?"}</div>` +
+        `<div class="card-body">` +
+        `<div class="name">${r.name}</div>` +
+        `<div class="recipe-ingredients">${ingLines}</div>` +
+        `<div class="row">` +
+        `<span class="rank-control ${isRankOpen ? "open" : ""} ${isMaxRank ? "max" : ""}">` +
+        `<button type="button" class="rank-trigger" aria-haspopup="menu" aria-expanded="${isRankOpen}" aria-label="${r.name} 랭크 ${item.rank}">Rank ${getRankLabel(item.rank)}</button>` +
+        `${isRankOpen ? `<span class="rank-menu" role="menu">${rankOptions}</span>` : ""}` +
+        `</span>` +
+        partyBadges(r.party) +
+        `</div></div>`;
+
+      // 완료는 랭크 MAX로만 정해진다(카드 클릭 체크 없음).
+      // 요리 카드는 클릭하면 해금조건·장인의 불꽃 정보를 아래에 펼친다(정보만).
+      if (r.category === "요리") {
+        card.addEventListener("click", () => toggleDishPanel(itemKey));
+        card.addEventListener("keydown", (event) => {
+          if (event.target.closest(".rank-control")) return;
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          toggleDishPanel(itemKey);
+        });
+      }
+
+      const rankControl = card.querySelector(".rank-control");
+      rankControl.addEventListener("click", (event) => event.stopPropagation());
+      rankControl.querySelector(".rank-trigger").addEventListener("click", () => {
+        openDishFishKey = null; // 랭크 메뉴를 열 때 요리 목록/정보 드롭다운은 닫아 겹침 방지
+        openRankKey = isRankOpen ? null : itemKey;
+        render();
+      });
+
+      rankControl.querySelectorAll(".rank-option").forEach((option) => {
+        option.addEventListener("click", () => {
+          openRankKey = null;
+          setItem(r, { rank: option.dataset.rank });
+        });
+      });
+
+      // 파티 태그 클릭: 그 태그를 가진 것만 필터. 다시 누르면 해제(낮/밤 배지와 동일).
+      card.querySelectorAll(".party-filter").forEach((btn) => {
+        btn.addEventListener("click", (event) => {
+          event.stopPropagation(); // 카드 클릭(요리 정보 펼치기) 방지
+          filters.party = filters.party === btn.dataset.party ? "" : btn.dataset.party;
+          render();
+        });
+      });
+
+      grid.appendChild(card);
+    });
+
+    app.appendChild(section);
+  });
+
+  // 열려 있던 요리 정보 드롭다운을 다시 붙인다(랭크 변경 등으로 재렌더돼도 유지).
+  if (openDishFishKey) attachDishDropdown(openDishFishKey);
+}
+
 function render() {
   renderSummary();
   renderAreaMenu();
@@ -271,9 +759,22 @@ function render() {
   const app = $("app");
   app.innerHTML = "";
 
+  if (activeTab === "sushi") {
+    renderRecipeTab(SUSHI_DATA, "표시할 초밥이 없습니다", true, "");
+    return;
+  }
+  if (activeTab === "cook") {
+    renderRecipeTab(COOK_DATA, "표시할 요리가 없습니다", false, "card--cook");
+    return;
+  }
+  if (activeTab !== "fish") {
+    renderPlaceholderTab();
+    return;
+  }
+
   const data = visibleFish();
   if (!data.length) {
-    app.innerHTML = '<div class="empty">표시할 물고기가 없습니다.</div>';
+    app.innerHTML = '<div class="empty">표시할 물고기가 없습니다</div>';
     return;
   }
 
@@ -283,10 +784,13 @@ function render() {
   });
 
   Object.entries(byArea).forEach(([area, list]) => {
+    // 섹션 순서는 원본(FISH_DATA) 순서를 유지하고, 섹션 안 물고기만 한글(가나다)로 정렬한다.
+    list.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+
     const section = document.createElement("section");
     section.className = "area";
 
-    const areaDone = list.filter((fish) => getItem(fish).checked).length;
+    const areaDone = list.filter(isDone).length;
     const collapsed = collapsedAreas.has(area);
     section.innerHTML = `<details open${collapsed ? ' class="collapsed"' : ""}><summary><span>${area}</span><b>${areaDone} / ${list.length}</b></summary><div class="area-content"${collapsed ? ' style="height:0px;overflow:hidden"' : ""}><div class="grid"></div></div></details>`;
 
@@ -306,14 +810,22 @@ function render() {
       const isMaxRank = item.rank === "MAX";
       const isBoss = fish.rank === "99";
       const isTank = Boolean(item.tank);
-      const activeTime = ACTIVE_TIME_META[fish.activeTime] || ACTIVE_TIME_META.always;
+      const timeKey = fish.activeTime || "always";
+      const activeTime = ACTIVE_TIME_META[timeKey] || ACTIVE_TIME_META.always;
+      // 낮·밤 배지는 클릭 필터로 동작한다. 항상 배지는 상호작용이 없다.
+      const timeFilterable = timeKey === "day" || timeKey === "night";
+      const timeFilterActive = filters.activeTime === timeKey;
 
       const card = document.createElement("article");
       card.className =
-        "card" + (item.checked ? " done" : "") + (isRankOpen ? " rank-open" : "");
+        "card" +
+        (isDone(fish) ? " done" : "") +
+        (isRankOpen ? " rank-open" : "") +
+        (openDishFishKey === itemKey ? " dish-open" : "");
       card.tabIndex = 0;
-      card.setAttribute("role", "checkbox");
-      card.setAttribute("aria-checked", String(item.checked));
+      card.dataset.key = itemKey;
+      card.setAttribute("role", "button");
+      card.setAttribute("aria-expanded", String(openDishFishKey === itemKey));
 
       const rankOptions = RANKS.map((rank) => {
         const selected = String(item.rank) === rank ? "selected" : "";
@@ -323,7 +835,9 @@ function render() {
       card.innerHTML =
         `<div class="icon">${fish.icon ? `<img src="${fish.icon}" alt="">` : "?"}</div>` +
         `<div class="card-body">` +
-        `<span class="time-badge time-${fish.activeTime || "always"}" aria-label="${activeTime.label}">${activeTime.icon}</span>` +
+        (timeFilterable
+          ? `<button type="button" class="time-badge time-${timeKey} time-filter${timeFilterActive ? " active" : ""}" aria-pressed="${timeFilterActive}" aria-label="${activeTime.label} 물고기만 보기">${activeTime.icon}</button>`
+          : `<span class="time-badge time-${timeKey}" aria-label="${activeTime.label}">${activeTime.icon}</span>`) +
         `<div class="name">${fish.name}</div>` +
         `<div class="eng">${fish.eng}</div>` +
         `<div class="row">` +
@@ -331,23 +845,28 @@ function render() {
         `<button type="button" class="rank-trigger" aria-haspopup="menu" aria-expanded="${isRankOpen}" aria-label="${fish.name} 랭크 ${item.rank}">Rank ${getRankLabel(item.rank)}</button>` +
         `${isRankOpen ? `<span class="rank-menu" role="menu">${rankOptions}</span>` : ""}` +
         `</span>` +
-        `<button type="button" class="tank-toggle ${isTank ? "active" : ""}" aria-pressed="${isTank}" aria-label="${isTank ? "수족관 등록됨" : "수족관 등록 안 됨"}">` +
-        `<span class="tank-toggle-dot"></span><span class="tank-toggle-text">Aqua</span></button>` +
+        (isBoss
+          ? ""
+          : `<button type="button" class="tank-toggle ${isTank ? "active" : ""}" aria-pressed="${isTank}" aria-label="${isTank ? "수족관 등록됨" : "수족관 등록 안 됨"}">` +
+            `<span class="tank-toggle-dot"></span><span class="tank-toggle-text">Aqua</span></button>`) +
         `${isBoss ? '<span class="boss-badge">Boss</span>' : ""}` +
+        `${fish.alsoIn && fish.alsoIn.length ? alsoInBadge(fish.alsoIn) : ""}` +
         `</div></div>`;
 
-      const toggleCard = () => setItem(fish, { checked: !item.checked });
-      card.addEventListener("click", toggleCard);
+      // 카드 클릭 = 이 물고기로 만드는 요리/초밥 목록을 아래에 펼치기/접기.
+      // (완료 여부는 Rank MAX로 자동 결정되므로 클릭으로 체크하지 않는다.)
+      card.addEventListener("click", () => toggleDishPanel(itemKey));
       card.addEventListener("keydown", (event) => {
-        if (event.target.closest(".rank-control") || event.target.closest(".tank-toggle")) return;
+        if (event.target.closest(".rank-control") || event.target.closest(".tank-toggle") || event.target.closest(".time-filter") || event.target.closest(".also-badge")) return;
         if (event.key !== "Enter" && event.key !== " ") return;
         event.preventDefault();
-        toggleCard();
+        toggleDishPanel(itemKey);
       });
 
       const rankControl = card.querySelector(".rank-control");
       rankControl.addEventListener("click", (event) => event.stopPropagation());
       rankControl.querySelector(".rank-trigger").addEventListener("click", () => {
+        openDishFishKey = null; // 랭크 메뉴를 열 때 요리 목록/정보 드롭다운은 닫아 겹침 방지
         openRankKey = isRankOpen ? null : itemKey;
         render();
       });
@@ -360,16 +879,35 @@ function render() {
       });
 
       const tankToggle = card.querySelector(".tank-toggle");
-      tankToggle.addEventListener("click", (event) => {
-        event.stopPropagation();
-        setItem(fish, { tank: !isTank });
-      });
+      if (tankToggle) {
+        tankToggle.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setItem(fish, { tank: !isTank });
+        });
+      }
+
+      // 낮·밤 배지 클릭: 같은 시간대 필터를 켜고, 다시 누르면 해제한다.
+      const timeBadge = card.querySelector(".time-filter");
+      if (timeBadge) {
+        timeBadge.addEventListener("click", (event) => {
+          event.stopPropagation();
+          filters.activeTime = filters.activeTime === timeKey ? "" : timeKey;
+          render();
+        });
+      }
+
+      // 추가 출현 배지는 정보 표시용이라 카드 체크 토글을 막는다.
+      const alsoBadge = card.querySelector(".also-badge");
+      if (alsoBadge) alsoBadge.addEventListener("click", (event) => event.stopPropagation());
 
       grid.appendChild(card);
     });
 
     app.appendChild(section);
   });
+
+  // 열려 있던 요리 목록 드롭다운을 다시 붙인다(랭크 변경 등으로 재렌더돼도 유지).
+  if (openDishFishKey) attachDishDropdown(openDishFishKey);
 }
 
 function getSyncDocId(syncKey) {
@@ -415,18 +953,18 @@ async function connectSync() {
   renderSyncControls();
 
   if (!inputKey) {
-    updateSyncStatus("ID를 입력해 주세요.", "warn");
+    updateSyncStatus("ID를 입력해 주세요", "warn");
     return;
   }
 
   if (!isFirebaseConfigured()) {
-    updateSyncStatus("firebase-config.js 설정이 필요합니다.", "warn");
+    updateSyncStatus("firebase-config.js 설정이 필요합니다", "warn");
     return;
   }
 
   const db = getFirebaseDb();
   if (!db) {
-    updateSyncStatus("Firebase 초기화에 실패했습니다.", "error");
+    updateSyncStatus("Firebase 초기화에 실패했습니다", "error");
     return;
   }
 
@@ -569,7 +1107,7 @@ async function pushStateToRemote() {
       const remoteSnap = await getDoc(sync.docRef);
       const remoteState = remoteSnap.exists() ? normalizeState(remoteSnap.data()?.state) : {};
       if (Object.keys(remoteState).length > 0) {
-        updateSyncStatus("안전장치: 빈 상태로 원격 데이터를 덮어쓰지 않았습니다.", "warn");
+        updateSyncStatus("안전장치: 빈 상태로 원격 데이터를 덮어쓰지 않았습니다", "warn");
         return;
       }
     } catch {
@@ -611,6 +1149,10 @@ function initFilters() {
   renderAreaMenu();
   renderSyncControls();
 
+  document.querySelectorAll(".side-tab").forEach((btn) => {
+    btn.addEventListener("click", () => setActiveTab(btn.dataset.tab));
+  });
+
   $("search").addEventListener("input", (event) => {
     filters.q = event.target.value.trim().toLowerCase();
     render();
@@ -622,12 +1164,6 @@ function initFilters() {
   });
 
   $("areaFilterMenu").addEventListener("click", (event) => event.stopPropagation());
-
-  $("todoOnly").addEventListener("click", () => {
-    filters.todo = !filters.todo;
-    $("todoOnly").classList.toggle("active", filters.todo);
-    render();
-  });
 
   $("notMaxOnly").addEventListener("click", () => {
     filters.notMax = !filters.notMax;
@@ -686,7 +1222,7 @@ function initFilters() {
   });
 }
 
-document.addEventListener("click", () => {
+document.addEventListener("click", (event) => {
   if (openRankKey) {
     openRankKey = null;
     render();
@@ -694,6 +1230,11 @@ document.addEventListener("click", () => {
   }
   if (areaMenuOpen) {
     setAreaMenuOpen(false);
+  }
+  // 카드 바깥을 클릭하면 요리 목록 드롭다운을 닫는다.
+  if (openDishFishKey && !event.target.closest(".card")) {
+    openDishFishKey = null;
+    removeDishPanel();
   }
 });
 
@@ -727,3 +1268,58 @@ if (sync.key) {
 } else if (!isFirebaseConfigured()) {
   updateSyncStatus("firebase-config.js 설정 후 로그인 가능", "warn");
 }
+
+// 마우스 휠 스크롤을 부드럽게(관성 느낌). 트랙패드·확대(ctrl)·줄 단위 휠·
+// 내부 스크롤 영역(요리 목록 드롭다운)·모달·모션 최소화 설정은 기본 동작을 유지한다.
+(function smoothWheelScroll() {
+  const EASE = 0.12; // 클수록 빠르게 따라붙음(작을수록 더 부드럽고 느림)
+  let target = window.scrollY;
+  let raf = null;
+
+  const maxScroll = () =>
+    Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+
+  function step() {
+    const cur = window.scrollY;
+    const diff = target - cur;
+    if (Math.abs(diff) < 0.5) {
+      window.scrollTo(0, target);
+      raf = null;
+      return;
+    }
+    window.scrollTo(0, cur + diff * EASE);
+    raf = requestAnimationFrame(step);
+  }
+
+  // 프로그램적 스크롤(탭 전환/대상 이동) 시 호출: 관성 애니메이션을 멈추고
+  // 목표를 현재 위치로 동기화해 되돌림을 막는다.
+  stopWheelScroll = () => {
+    if (raf !== null) {
+      cancelAnimationFrame(raf);
+      raf = null;
+    }
+    target = window.scrollY;
+  };
+
+  window.addEventListener(
+    "wheel",
+    (event) => {
+      if (event.ctrlKey) return; // 확대(ctrl+휠)는 기본
+      if (document.body.classList.contains("modal-open")) return; // 모달 열림 시 기본
+      if (event.target.closest(".dish-dropdown")) return; // 자체 스크롤 영역
+      if (maxScroll() <= 0) return; // 스크롤할 게 없으면 기본
+
+      // 델타 단위 환산: 0=픽셀, 1=줄(마우스에서 흔함), 2=페이지
+      let dy = event.deltaY;
+      if (event.deltaMode === 1) dy *= 40;
+      else if (event.deltaMode === 2) dy *= window.innerHeight;
+      if (!dy) return;
+
+      event.preventDefault();
+      if (raf === null) target = window.scrollY; // 멈춰 있었으면 현재 위치로 동기화
+      target = Math.max(0, Math.min(maxScroll(), target + dy));
+      if (raf === null) raf = requestAnimationFrame(step);
+    },
+    { passive: false },
+  );
+})();

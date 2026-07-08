@@ -7,25 +7,43 @@
   <link rel="stylesheet" href="./style.css">
 </head>
 <body>
+  <div class="app-layout">
+    <nav class="sidebar" aria-label="카테고리 탭">
+      <div class="sidebar-brand" aria-hidden="true">
+        <span class="sidebar-logo">🤿</span>
+        <span class="sidebar-logo-text">CHECKLIST</span>
+      </div>
+      <button type="button" class="side-tab active" data-tab="fish">
+        <span class="side-tab-ico" aria-hidden="true">🐟</span>
+        <span class="side-tab-label">물고기</span>
+      </button>
+      <button type="button" class="side-tab" data-tab="sushi">
+        <span class="side-tab-ico" aria-hidden="true">🍣</span>
+        <span class="side-tab-label">초밥</span>
+      </button>
+      <button type="button" class="side-tab" data-tab="cook">
+        <span class="side-tab-ico" aria-hidden="true">🍳</span>
+        <span class="side-tab-label">요리</span>
+      </button>
+      <button id="authBtn" type="button" class="auth-btn">로그인</button>
+    </nav>
+    <div class="content">
   <header>
     <div class="header-inner">
       <div class="header-top">
         <div class="brand">
           <div class="brand-title">
-            <span class="brand-mark" aria-hidden="true">🐟</span>
             <h1>Dave the Diver Checklist</h1>
           </div>
-          <p class="brand-sub">물고기 도감 수집 체크리스트</p>
+          <p class="brand-sub">물고기 · 초밥 · 요리 수집 체크리스트</p>
         </div>
-        <button id="authBtn" type="button" class="auth-btn">로그인</button>
       </div>
       <div class="toolbar">
-        <input id="search" placeholder="물고기 이름, 영어 이름, 지역">
+        <input id="search" placeholder="이름, 지역, 재료 등">
         <div class="toolbar-select" id="areaFilterWrap">
           <button id="areaFilterTrigger" type="button" class="toolbar-select-trigger" aria-haspopup="menu" aria-expanded="false">전체 지역</button>
           <div id="areaFilterMenu" class="toolbar-select-menu" role="menu"></div>
         </div>
-        <button id="todoOnly">완료 숨기기</button>
         <button id="notMaxOnly">MAX 숨기기</button>
         <button id="resetBtn">초기화</button>
       </div>
@@ -41,12 +59,20 @@
     </section>
     <div id="app"></div>
   </main>
+      <footer class="site-footer">
+        <p class="footer-title">🐟 Dave the Diver Checklist</p>
+        <p>팬이 만든 비공식 도감 · 요리 체크리스트입니다 · Dave the Diver™ 및 모든 게임 콘텐츠에 대한 권리는 MINTROCKET / NEXON에 있습니다</p>
+        <p class="footer-sub">데이터 · 이미지 출처: 나무위키 · Dave the Diver Fandom Wiki &nbsp;·&nbsp; © 2026 Dave the Diver Checklist</p>
+      </footer>
+    </div>
+  </div>
 
   <div id="resetModal" class="modal-shell" hidden>
     <div class="modal-backdrop" data-close-reset="true"></div>
     <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle">
-      <h2 id="resetModalTitle">진행 기록 초기화</h2>
-      <p>체크, 랭크, 수족관 상태를 모두 지웁니다.</p>
+      <h2 id="resetModalTitle">설정 내용 초기화</h2>
+      <p id="resetDesc">아래 내용이 모두 초기화 됩니다</p>
+      <ul id="resetList" class="reset-list"></ul>
       <div class="modal-actions">
         <button id="resetCancelBtn" type="button" class="modal-btn">취소</button>
         <button id="resetConfirmBtn" type="button" class="modal-btn modal-btn-danger">초기화</button>
@@ -58,7 +84,7 @@
     <div class="modal-backdrop" data-close-login="true"></div>
     <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
       <h2 id="loginModalTitle">로그인</h2>
-      <p>같은 ID로 로그인한 기기끼리 진행 기록이 동기화됩니다.</p>
+      <p>같은 ID로 로그인한 기기끼리 진행 기록이 동기화됩니다</p>
       <input id="syncKey" type="text" class="login-input" placeholder="ID" autocomplete="off">
       <span id="syncStatus" class="sync-status" data-tone="idle"></span>
       <div class="modal-actions">
@@ -69,6 +95,8 @@
   </div>
 
   <script src="./data.js"></script>
+  <script src="./sushi-data.js"></script>
+  <script src="./cook-data.js"></script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
