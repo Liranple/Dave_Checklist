@@ -4,6 +4,9 @@ import { firebaseConfig, isFirebaseConfigured } from "./firebase-config.js";
 
 const FISH_DATA = window.FISH_DATA || [];
 const RANKS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "MAX"];
+// ⚠️ 이 두 상수는 절대 바꾸지 말 것.
+// 값을 바꾸면 기존 사용자의 localStorage 데이터(진행 기록)와 저장된 Sync Key가
+// 새 키에서 조회되지 않아 "데이터가 날아간 것"처럼 보인다. (원격 데이터는 남아있지만 접근 불가)
 const STORE_KEY = "dave_checklist_v2";
 const SYNC_KEY_STORAGE = "dave_checklist_sync_key";
 
@@ -130,8 +133,14 @@ function setItem(fish, patch) {
   persistState();
 }
 
+// 빈 상태를 원격에 반영해도 되는지 여부.
+// 평소엔 false라서 빈 state가 원격의 실제 데이터를 덮어쓰는 사고를 막는다.
+// 사용자가 직접 "초기화"를 눌렀을 때만 true가 되어 의도된 비우기를 허용한다.
+let allowEmptyRemotePush = false;
+
 function resetState() {
   state = {};
+  allowEmptyRemotePush = true;
   persistState({ renderAfter: false });
 }
 
@@ -366,9 +375,15 @@ async function connectSync() {
     const sameKeyAsLocal = stateOwnerKey === inputKey;
 
     if (remoteData) {
+      // 자가 복구 안전장치: 로컬은 비었는데(버그·저장소 손상 등) 원격엔 실제 데이터가 있으면,
+      // 타임스탬프와 무관하게 원격을 채택해 진행 기록을 되살린다.
+      const localEmpty = Object.keys(state).length === 0;
+      const remoteEmpty = Object.keys(remoteState).length === 0;
+      const localBrokenEmpty = localEmpty && !remoteEmpty;
+
       // 원격 문서 존재: 같은 키로 재연결이고 로컬이 더 최신일 때만 로컬을 푸시하고,
-      // 그 외(다른 키로 전환 등)에는 이 키의 원격 데이터를 그대로 채택해 교차 오염을 막는다.
-      if (sameKeyAsLocal && stateModifiedAt > remoteModifiedAt) {
+      // 그 외(다른 키로 전환, 또는 위의 로컬 손상 상황)에는 원격 데이터를 그대로 채택한다.
+      if (sameKeyAsLocal && stateModifiedAt > remoteModifiedAt && !localBrokenEmpty) {
         stateOwnerKey = inputKey;
         await pushStateToRemote();
       } else {
@@ -462,12 +477,31 @@ function disconnectSync({ silent = false } = {}) {
 async function pushStateToRemote() {
   if (!sync.docRef) return;
 
+  // 🛡️ 데이터 유실 방지 안전장치:
+  // 로컬 state가 비어 있는데(버그·사고 등) 원격에는 실제 진행 데이터가 있다면,
+  // 사용자가 직접 초기화한 경우가 아닌 한 원격을 덮어쓰지 않는다.
+  // (이 가드가 없으면 빈 {} 하나가 모든 기기의 데이터를 지워버릴 수 있다.)
+  if (Object.keys(state).length === 0 && !allowEmptyRemotePush) {
+    try {
+      const remoteSnap = await getDoc(sync.docRef);
+      const remoteState = remoteSnap.exists() ? normalizeState(remoteSnap.data()?.state) : {};
+      if (Object.keys(remoteState).length > 0) {
+        updateSyncStatus("안전장치: 빈 상태로 원격 데이터를 덮어쓰지 않았습니다.", "warn");
+        return;
+      }
+    } catch {
+      // 원격 상태를 확인하지 못하면 위험하므로 푸시를 보류한다.
+      return;
+    }
+  }
+
   const payload = {
     state,
     modifiedAt: stateModifiedAt,
   };
 
   sync.lastRemoteHash = getStateHash(payload);
+  allowEmptyRemotePush = false;
 
   await setDoc(
     sync.docRef,
