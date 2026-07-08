@@ -37,4 +37,4 @@ else
 fi
 
 echo ""
-echo "✅ 배포 완료: https://davechecklist-60f03.web.app"
+echo "✅ 배포 완료: https://dave-checklist.web.app"
