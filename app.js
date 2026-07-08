@@ -341,7 +341,7 @@ async function connectSync() {
   renderSyncControls();
 
   if (!inputKey) {
-    updateSyncStatus("Sync Key를 입력해 주세요.", "warn");
+    updateSyncStatus("ID를 입력해 주세요.", "warn");
     return;
   }
 
@@ -359,7 +359,7 @@ async function connectSync() {
   disconnectSync({ silent: true });
   sync.connecting = true;
   renderSyncControls();
-  updateSyncStatus("동기화 연결 중...", "idle");
+  updateSyncStatus("로그인 중...", "idle");
 
   const docRef = doc(db, "checklists", getSyncDocId(inputKey));
   sync.docRef = docRef;
@@ -432,26 +432,26 @@ async function connectSync() {
         sync.connected = true;
         sync.connecting = false;
         renderSyncControls();
-        updateSyncStatus(`동기화 연결됨: ${sync.key}`, "ok");
+        updateSyncStatus(`로그인됨: ${sync.key}`, "ok");
       },
       () => {
         sync.connecting = false;
         sync.connected = false;
         renderSyncControls();
-        updateSyncStatus("동기화 연결 오류", "error");
+        updateSyncStatus("연결 오류", "error");
       },
     );
 
     sync.connected = true;
     sync.connecting = false;
     renderSyncControls();
-    updateSyncStatus(`동기화 연결됨: ${sync.key}`, "ok");
+    updateSyncStatus(`로그인됨: ${sync.key}`, "ok");
   } catch {
     sync.connecting = false;
     sync.connected = false;
     sync.docRef = null;
     renderSyncControls();
-    updateSyncStatus("동기화 연결 실패", "error");
+    updateSyncStatus("로그인 실패", "error");
   }
 }
 
@@ -470,7 +470,7 @@ function disconnectSync({ silent = false } = {}) {
   sync.lastRemoteHash = "";
   renderSyncControls();
   if (!silent) {
-    updateSyncStatus("로컬 저장만 사용 중", "idle");
+    updateSyncStatus("로그아웃 상태 · 이 기기에만 저장", "idle");
   }
 }
 
@@ -519,7 +519,7 @@ function scheduleRemoteSave() {
   if (sync.saveTimer) clearTimeout(sync.saveTimer);
   sync.saveTimer = setTimeout(() => {
     pushStateToRemote().catch(() => {
-      updateSyncStatus("동기화 저장 실패", "error");
+      updateSyncStatus("저장 실패", "error");
     });
   }, 180);
 }
@@ -620,10 +620,10 @@ initFilters();
 render();
 
 if (sync.key) {
-  updateSyncStatus("저장된 Sync Key로 연결 시도 중...", "idle");
+  updateSyncStatus("저장된 ID로 로그인 중...", "idle");
   connectSync();
 } else if (isFirebaseConfigured()) {
-  updateSyncStatus("Sync Key를 입력하면 동기화할 수 있습니다.", "idle");
+  updateSyncStatus("ID를 입력하면 여러 기기에서 공유됩니다.", "idle");
 } else {
-  updateSyncStatus("firebase-config.js 설정 후 동기화 가능", "warn");
+  updateSyncStatus("firebase-config.js 설정 후 로그인 가능", "warn");
 }
