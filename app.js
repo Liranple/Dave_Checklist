@@ -20,6 +20,9 @@ const localStore = loadLocalStore();
 
 let state = localStore.state;
 let stateModifiedAt = localStore.modifiedAt;
+// 현재 로컬 state가 어느 Sync Key에 속한 데이터인지 추적 (""=로컬 전용, 아직 동기화 안 됨).
+// 키를 바꿔 연결할 때 서로 다른 키의 데이터가 섞이는 것을 막는 데 사용.
+let stateOwnerKey = localStore.ownerKey;
 let filters = { q: "", area: "", todo: false, notMax: false };
 let openRankKey = null;
 let areaMenuOpen = false;
@@ -46,14 +49,16 @@ function loadLocalStore() {
       return {
         state: normalizeState(raw.state),
         modifiedAt: Number(raw.modifiedAt) || 0,
+        ownerKey: typeof raw.ownerKey === "string" ? raw.ownerKey : "",
       };
     }
     return {
       state: normalizeState(raw || {}),
       modifiedAt: 0,
+      ownerKey: "",
     };
   } catch {
-    return { state: {}, modifiedAt: 0 };
+    return { state: {}, modifiedAt: 0, ownerKey: "" };
   }
 }
 
@@ -85,6 +90,7 @@ function saveLocalStore() {
     JSON.stringify({
       state,
       modifiedAt: stateModifiedAt,
+      ownerKey: stateOwnerKey,
     }),
   );
 }
@@ -355,16 +361,36 @@ async function connectSync() {
     const remoteState = normalizeState(remoteData?.state);
     const remoteModifiedAt = Number(remoteData?.modifiedAt) || 0;
 
+    // 현재 로컬 state가 지금 연결하려는 키의 데이터인지 판별.
+    // 같은 키일 때만 타임스탬프 병합(오프라인 편집 반영)이 의미가 있다.
+    const sameKeyAsLocal = stateOwnerKey === inputKey;
+
     if (remoteData) {
-      if (remoteModifiedAt >= stateModifiedAt) {
+      // 원격 문서 존재: 같은 키로 재연결이고 로컬이 더 최신일 때만 로컬을 푸시하고,
+      // 그 외(다른 키로 전환 등)에는 이 키의 원격 데이터를 그대로 채택해 교차 오염을 막는다.
+      if (sameKeyAsLocal && stateModifiedAt > remoteModifiedAt) {
+        stateOwnerKey = inputKey;
+        await pushStateToRemote();
+      } else {
         state = remoteState;
         stateModifiedAt = remoteModifiedAt;
+        stateOwnerKey = inputKey;
         saveLocalStore();
         render();
-      } else {
-        await pushStateToRemote();
       }
+    } else if (stateOwnerKey === "" || sameKeyAsLocal) {
+      // 원격 문서 없음 + (아직 어떤 키에도 속하지 않은 로컬 전용 상태 이거나, 같은 키의 원격이 사라진 경우)
+      // → 현재 진행도로 이 키를 시드/복구한다.
+      stateOwnerKey = inputKey;
+      await pushStateToRemote();
     } else {
+      // 원격 문서 없음 + 다른 키에 속한 로컬 상태 → 새 키는 빈 상태로 시작한다.
+      // (이전 키의 데이터를 새 키에 밀어넣지 않는다.)
+      state = {};
+      stateOwnerKey = inputKey;
+      touchState();
+      saveLocalStore();
+      render();
       await pushStateToRemote();
     }
 

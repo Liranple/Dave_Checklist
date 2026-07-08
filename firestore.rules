@@ -1,0 +1,16 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 체크리스트 동기화 문서: Sync Key(문서 ID)를 아는 사람만 읽고 쓸 수 있음.
+    // 인증 없이 동작하는 개인용 앱이므로, Sync Key 자체가 접근 비밀번호 역할을 함.
+    match /checklists/{syncKey} {
+      allow read, write: if true;
+    }
+
+    // 그 외 모든 경로는 차단
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
