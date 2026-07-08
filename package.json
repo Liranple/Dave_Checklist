@@ -1,0 +1,15 @@
+{
+  "name": "dave-checklist",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host localhost --port 3000"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "dependencies": {
+    "firebase": "^12.15.0"
+  }
+}

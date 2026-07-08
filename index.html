@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dave the Diver Checklist</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <h1>Dave the Diver Checklist</h1>
+      <div class="toolbar">
+        <input id="search" placeholder="검색: 물고기 이름, 영어 이름, 지역">
+        <div class="toolbar-select" id="areaFilterWrap">
+          <button id="areaFilterTrigger" type="button" class="toolbar-select-trigger" aria-haspopup="menu" aria-expanded="false">전체 지역</button>
+          <div id="areaFilterMenu" class="toolbar-select-menu" role="menu"></div>
+        </div>
+        <button id="todoOnly">미완료만</button>
+        <button id="notMaxOnly">MAX 아님</button>
+        <button id="resetBtn">초기화</button>
+      </div>
+      <div class="syncbar">
+        <input id="syncKey" type="text" placeholder="Sync Key">
+        <button id="syncConnectBtn" type="button">동기화 연결</button>
+        <button id="syncDisconnectBtn" type="button" hidden>연결 해제</button>
+        <span id="syncStatus" class="sync-status">로컬 저장만 사용 중</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary">
+      <div class="stat">전체<br><b id="total">0</b></div>
+      <div class="stat">완료<br><b id="done">0</b></div>
+      <div class="stat">미완료<br><b id="todo">0</b></div>
+      <div class="stat">진행률<br><b id="rate">0%</b></div>
+    </section>
+    <div id="app"></div>
+  </main>
+
+  <div id="resetModal" class="modal-shell" hidden>
+    <div class="modal-backdrop" data-close-reset="true"></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle">
+      <h2 id="resetModalTitle">진행 기록 초기화</h2>
+      <p>체크, 랭크, 수족관 상태를 모두 지웁니다.</p>
+      <div class="modal-actions">
+        <button id="resetCancelBtn" type="button" class="modal-btn">취소</button>
+        <button id="resetConfirmBtn" type="button" class="modal-btn modal-btn-danger">초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./data.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
