@@ -53,16 +53,46 @@ body {
     BlinkMacSystemFont,
     "Segoe UI",
     sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 검색창(그리고 로그인 ID 입력칸)만 텍스트 선택/드래그 허용 */
+#search,
+.login-input {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 header {
   position: sticky;
   top: 0;
   z-index: 5;
-  background: rgba(7, 19, 27, 0.9);
-  border-bottom: 1px solid var(--line);
+  background:
+    radial-gradient(
+      120% 140% at 50% -40%,
+      rgba(82, 211, 255, 0.16),
+      transparent 60%
+    ),
+    linear-gradient(180deg, rgba(11, 32, 44, 0.92), rgba(7, 19, 27, 0.9));
   backdrop-filter: blur(14px);
-  padding: 16px 12px;
+  padding: 26px 12px 22px;
+}
+
+/* 밋밋한 실선 대신 가운데가 은은하게 빛나는 그라디언트 하단 라인 */
+header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(82, 211, 255, 0.55) 50%,
+    transparent
+  );
 }
 
 .header-inner {
@@ -71,25 +101,122 @@ header {
   padding: 0px 12px;
 }
 
+.header-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.brand {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.brand-title {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.brand-mark {
+  font-size: 32px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 10px rgba(82, 211, 255, 0.45));
+  transform: translateY(1px);
+}
+
 h1 {
-  margin: 0 0 12px;
-  font-size: 24px;
-  line-height: 1.1;
+  margin: 0;
+  font-size: 44px;
+  line-height: 1.05;
+  text-align: center;
+  letter-spacing: 0.4px;
+  font-weight: 850;
+  background: linear-gradient(180deg, #f2ffff 0%, #b7edff 52%, #52d3ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 2px 12px rgba(82, 211, 255, 0.28));
+}
+
+.brand-sub {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.9;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 서브타이틀 양옆에 짧은 장식 라인을 둬서 균형을 잡는다. */
+.brand-sub::before,
+.brand-sub::after {
+  content: "";
+  width: 26px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(151, 191, 207, 0.55));
+}
+
+.brand-sub::after {
+  transform: scaleX(-1);
+}
+
+.auth-btn {
+  grid-column: 3;
+  justify-self: end;
+  min-width: 100px;
+  border-color: rgba(82, 211, 255, 0.4);
+  background: linear-gradient(
+    135deg,
+    rgba(82, 211, 255, 0.22),
+    rgba(82, 211, 255, 0.06)
+  );
+  color: #dff6ff;
+}
+
+.auth-btn:hover {
+  border-color: rgba(82, 211, 255, 0.7);
+  color: #eaf9ff;
+}
+
+.auth-btn.logged-in {
+  border-color: rgba(255, 138, 138, 0.42);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 138, 138, 0.2),
+    rgba(255, 209, 102, 0.06)
+  );
+  color: #ffe3e3;
+}
+
+.auth-btn.logged-in:hover {
+  border-color: rgba(255, 138, 138, 0.7);
+  color: #ffffff;
 }
 
 .toolbar {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) minmax(180px, 260px) auto auto auto;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
-.syncbar {
-  display: grid;
-  grid-template-columns: minmax(180px, 240px) auto auto minmax(0, 1fr);
-  gap: 8px;
-  align-items: center;
-  margin-top: 8px;
+/* 툴바 컨트롤은 조금 더 높여 손이 편하고 여유롭게 보이도록 한다. */
+.toolbar input,
+.toolbar button,
+.toolbar-select-trigger {
+  min-height: 44px;
 }
 
 .sync-status {
@@ -106,6 +233,10 @@ h1 {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.sync-status:empty {
+  display: none;
 }
 
 .sync-status[data-tone="ok"] {
@@ -250,38 +381,101 @@ main {
 .summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 18px;
+  gap: 12px;
+  margin-bottom: 22px;
 }
 
 .stat {
-  min-height: 78px;
-  background: rgba(13, 28, 37, 0.78);
+  position: relative;
+  overflow: hidden;
+  min-height: 84px;
+  background: linear-gradient(
+    180deg,
+    rgba(16, 38, 49, 0.82),
+    rgba(10, 24, 32, 0.82)
+  );
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: 12px;
+  padding: 14px 16px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+/* 상단 톤 컬러 하이라이트 라인 — 헤더 하단의 빛나는 그라디언트 라인과 같은 언어 */
+.stat::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--stat-accent, rgba(82, 211, 255, 0.6)),
+    transparent
+  );
 }
 
 .stat b {
   display: block;
-  margin-top: 6px;
-  color: var(--text);
-  font-size: 28px;
+  margin-top: 8px;
+  font-size: 30px;
   line-height: 1;
+  font-weight: 850;
+  background: var(
+    --stat-num,
+    linear-gradient(180deg, #f2ffff 0%, #b7edff 55%, #52d3ff 100%)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  filter: drop-shadow(0 2px 10px var(--stat-glow, rgba(82, 211, 255, 0.22)));
+}
+
+.stat--total {
+  --stat-accent: rgba(82, 211, 255, 0.6);
+  --stat-num: linear-gradient(180deg, #f2ffff 0%, #b7edff 55%, #52d3ff 100%);
+  --stat-glow: rgba(82, 211, 255, 0.22);
+}
+
+.stat--done {
+  --stat-accent: rgba(101, 242, 140, 0.6);
+  --stat-num: linear-gradient(180deg, #eafff1 0%, #9df6b8 55%, #65f28c 100%);
+  --stat-glow: rgba(101, 242, 140, 0.22);
+}
+
+.stat--todo {
+  --stat-accent: rgba(255, 209, 102, 0.55);
+  --stat-num: linear-gradient(180deg, #fff6e2 0%, #ffe1a0 55%, #ffd166 100%);
+  --stat-glow: rgba(255, 209, 102, 0.2);
+}
+
+.stat--rate {
+  --stat-accent: rgba(82, 211, 255, 0.72);
+  --stat-num: linear-gradient(180deg, #f2ffff 0%, #b7edff 52%, #52d3ff 100%);
+  --stat-glow: rgba(82, 211, 255, 0.3);
 }
 
 .area {
-  margin: 0 0 18px;
+  margin: 0 0 22px;
 }
 
 details {
-  background: rgba(10, 24, 32, 0.62);
+  background: linear-gradient(
+    180deg,
+    rgba(14, 33, 43, 0.72),
+    rgba(9, 21, 28, 0.72)
+  );
   border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 10px;
+  border-radius: 14px;
+  padding: 10px 14px 14px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
 }
 
 summary {
@@ -290,11 +484,41 @@ summary {
   justify-content: space-between;
   align-items: center;
   gap: 14px;
-  padding: 2px 2px 14px;
-  font-size: 25px;
+  padding: 10px 4px 18px;
+  font-size: 30px;
   font-weight: 850;
-  line-height: 1.15;
+  line-height: 1.25;
   user-select: none;
+  list-style: none;
+}
+
+/* 접었을 때는 아래 콘텐츠 간격이 필요 없으므로 위(10px)와 동일하게 맞춘다.
+   전환은 두지 않는다: 펼칠 때 즉시 18px, 접을 때는 애니메이션이 끝난 뒤 10px로
+   바꿔서 카드가 보이는 동안에는 위치가 흔들리지 않게 한다(app.js toggleArea 참고). */
+details.collapsed summary {
+  padding-bottom: 10px;
+}
+
+summary::-webkit-details-marker {
+  display: none;
+}
+
+/* 지역 이름 왼쪽에 시안→그린 accent 바를 둬서 헤더와 같은 브랜드 언어로 묶는다. */
+summary > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 13px;
+  min-width: 0;
+}
+
+summary > span::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 5px;
+  height: 26px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), rgba(101, 242, 140, 0.85));
+  box-shadow: 0 0 12px rgba(82, 211, 255, 0.45);
 }
 
 summary b {
@@ -727,21 +951,43 @@ summary b {
   color: #ffffff;
 }
 
+.modal-btn-primary {
+  border-color: rgba(82, 211, 255, 0.5);
+  background: linear-gradient(
+    135deg,
+    rgba(82, 211, 255, 0.28),
+    rgba(82, 211, 255, 0.08)
+  );
+  color: #eaf9ff;
+}
+
+.modal-btn-primary:hover {
+  border-color: rgba(82, 211, 255, 0.8);
+  color: #ffffff;
+}
+
+#loginModal .modal-panel {
+  user-select: none;
+}
+
+.login-input {
+  width: 100%;
+  margin-top: 14px;
+  user-select: text;
+}
+
+.modal-panel .sync-status {
+  width: 100%;
+  margin-top: 12px;
+  white-space: normal;
+}
+
 @media (max-width: 860px) {
   .toolbar {
     grid-template-columns: 1fr 1fr;
   }
 
   .toolbar input {
-    grid-column: 1 / -1;
-  }
-
-  .syncbar {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .syncbar input,
-  .sync-status {
     grid-column: 1 / -1;
   }
 }
@@ -770,7 +1016,25 @@ summary b {
   }
 
   h1 {
-    font-size: 21px;
+    font-size: 27px;
+  }
+
+  .brand-mark {
+    font-size: 24px;
+  }
+
+  .brand-sub {
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+
+  .brand-sub::before,
+  .brand-sub::after {
+    width: 16px;
+  }
+
+  .auth-btn {
+    min-width: 84px;
   }
 
   main {
@@ -783,7 +1047,7 @@ summary b {
 
   summary {
     align-items: flex-start;
-    font-size: 21px;
+    font-size: 25px;
   }
 
   .grid {

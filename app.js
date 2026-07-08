@@ -13,7 +13,7 @@ const SYNC_KEY_STORAGE = "dave_checklist_sync_key";
 const ACTIVE_TIME_META = {
   day: { icon: "\u2600", label: "낮" },
   night: { icon: "\u263D", label: "밤" },
-  always: { icon: "\u25CC", label: "항상" },
+  always: { icon: "\u25D0", label: "항상" }, // \u25D0 낮·밤 합체 = 항상
 };
 
 const AREA_ALL_VALUE = "";
@@ -30,6 +30,9 @@ let filters = { q: "", area: "", todo: false, notMax: false };
 let openRankKey = null;
 let areaMenuOpen = false;
 let resetModalOpen = false;
+let loginModalOpen = false;
+// 사용자가 접어둔 지역 이름 모음. 재렌더링(체크 등)에도 접힘 상태를 유지하기 위해 사용.
+const collapsedAreas = new Set();
 
 const sync = {
   key: localStorage.getItem(SYNC_KEY_STORAGE) || "",
@@ -181,6 +184,17 @@ function setResetModalOpen(open) {
   document.body.classList.toggle("modal-open", open);
 }
 
+function setLoginModalOpen(open) {
+  loginModalOpen = open;
+  $("loginModal").hidden = !open;
+  document.body.classList.toggle("modal-open", open);
+  if (open) {
+    renderSyncControls();
+    updateSyncStatus("", "idle");
+    $("syncKey").focus();
+  }
+}
+
 function visibleFish() {
   return FISH_DATA.filter((fish) => {
     const item = getItem(fish);
@@ -200,6 +214,54 @@ function renderSummary() {
   $("done").textContent = done;
   $("todo").textContent = total - done;
   $("rate").textContent = total ? `${Math.round((done / total) * 100)}%` : "0%";
+}
+
+// 펼침/접힘 속도를 픽셀당 시간으로 통일한다. 고정 시간(ms)을 쓰면 내용이 적은
+// 섹션은 느려 보이고 많은 섹션은 빨라 보이므로, 이동 거리에 비례해 시간을 정한다.
+const AREA_ANIM_SPEED = 1.6; // px/ms (클수록 전체적으로 빠름)
+const AREA_ANIM_MIN_MS = 300; // 아주 짧은 섹션이 너무 순식간에 끝나지 않도록
+const AREA_ANIM_MAX_MS = 520; // 아주 긴 섹션이 너무 늘어지지 않도록
+const AREA_ANIM_EASING = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+function areaAnimDuration(distancePx) {
+  const ms = distancePx / AREA_ANIM_SPEED;
+  return Math.min(AREA_ANIM_MAX_MS, Math.max(AREA_ANIM_MIN_MS, ms));
+}
+
+// height를 from → to로 애니메이션한 뒤, 끝나면 resting 값으로 고정한다.
+// 애니메이션 중에는 overflow를 hidden으로 잘라내고, 끝난 뒤엔 restingOverflow로 되돌린다.
+// (펼친 상태에서는 overflow visible이어야 카드의 Rank 드롭다운이 잘리지 않는다.)
+// fill:forwards로 끝 값을 유지하다가 inline으로 옮기고 취소하여 깜빡임을 없앤다.
+function animateAreaHeight(contentEl, from, to, resting, restingOverflow, onDone) {
+  contentEl.getAnimations().forEach((anim) => anim.cancel());
+  contentEl.style.overflow = "hidden";
+  const anim = contentEl.animate(
+    [{ height: from }, { height: to }],
+    { duration: areaAnimDuration(contentEl.scrollHeight), easing: AREA_ANIM_EASING, fill: "forwards" },
+  );
+  anim.onfinish = () => {
+    contentEl.style.height = resting;
+    contentEl.style.overflow = restingOverflow;
+    anim.cancel();
+    onDone?.();
+  };
+}
+
+function toggleArea(area, contentEl) {
+  const full = `${contentEl.scrollHeight}px`;
+  const details = contentEl.closest("details");
+  if (collapsedAreas.has(area)) {
+    collapsedAreas.delete(area);
+    // 펼침: 패딩을 먼저 18px로 되돌린 뒤 높이만 애니메이션 → 카드가 최종 위치에 나타나 흔들리지 않음
+    details?.classList.remove("collapsed");
+    animateAreaHeight(contentEl, "0px", full, "", ""); // 펼침: auto 높이 + overflow visible
+  } else {
+    collapsedAreas.add(area);
+    // 접힘: 접히는 동안 패딩 18px 유지, 애니메이션이 끝나(카드가 안 보일 때) 10px로 줄임
+    animateAreaHeight(contentEl, full, "0px", "0px", "hidden", () =>
+      details?.classList.add("collapsed"),
+    ); // 접힘
+  }
 }
 
 function render() {
@@ -225,9 +287,17 @@ function render() {
     section.className = "area";
 
     const areaDone = list.filter((fish) => getItem(fish).checked).length;
-    section.innerHTML = `<details open><summary><span>${area}</span><b>${areaDone} / ${list.length}</b></summary><div class="grid"></div></details>`;
+    const collapsed = collapsedAreas.has(area);
+    section.innerHTML = `<details open${collapsed ? ' class="collapsed"' : ""}><summary><span>${area}</span><b>${areaDone} / ${list.length}</b></summary><div class="area-content"${collapsed ? ' style="height:0px;overflow:hidden"' : ""}><div class="grid"></div></div></details>`;
 
     const grid = section.querySelector(".grid");
+    const areaContent = section.querySelector(".area-content");
+
+    // 네이티브 details 토글을 막고 우리가 높이 애니메이션으로 직접 접고 편다.
+    section.querySelector("summary").addEventListener("click", (event) => {
+      event.preventDefault();
+      toggleArea(area, areaContent);
+    });
 
     list.forEach((fish) => {
       const item = getItem(fish);
@@ -318,9 +388,13 @@ function updateSyncStatus(message, tone = "idle") {
 
 function renderSyncControls() {
   $("syncKey").value = sync.key;
-  $("syncConnectBtn").disabled = sync.connecting || sync.connected;
-  $("syncDisconnectBtn").hidden = !sync.connected && !sync.connecting;
-  $("syncDisconnectBtn").disabled = sync.connecting;
+  $("syncConnectBtn").disabled = sync.connecting;
+
+  // 상단 버튼: 로그인 상태면 "로그아웃"(붉은 배경), 아니면 "로그인"(파란 배경)으로 토글.
+  const authBtn = $("authBtn");
+  authBtn.textContent = sync.connected ? "로그아웃" : "로그인";
+  authBtn.classList.toggle("logged-in", sync.connected);
+  authBtn.disabled = sync.connecting;
 }
 
 function getFirebaseDb() {
@@ -446,6 +520,7 @@ async function connectSync() {
     sync.connecting = false;
     renderSyncControls();
     updateSyncStatus(`로그인됨: ${sync.key}`, "ok");
+    setLoginModalOpen(false);
   } catch {
     sync.connecting = false;
     sync.connected = false;
@@ -470,8 +545,16 @@ function disconnectSync({ silent = false } = {}) {
   sync.lastRemoteHash = "";
   renderSyncControls();
   if (!silent) {
-    updateSyncStatus("로그아웃 상태 · 이 기기에만 저장", "idle");
+    updateSyncStatus("", "idle");
   }
+}
+
+// 사용자가 직접 로그아웃: 저장된 ID를 지워 다음 방문 때 자동 로그인되지 않게 한다.
+// (로컬 진행 기록 자체는 유지된다.)
+function logout() {
+  sync.key = "";
+  localStorage.removeItem(SYNC_KEY_STORAGE);
+  disconnectSync();
 }
 
 async function pushStateToRemote() {
@@ -572,12 +655,27 @@ function initFilters() {
     }
   });
 
-  $("syncConnectBtn").addEventListener("click", () => {
-    connectSync();
+  // 상단 버튼: 로그인 상태면 로그아웃, 아니면 로그인 모달을 연다.
+  $("authBtn").addEventListener("click", () => {
+    if (sync.connected) {
+      logout();
+    } else {
+      setLoginModalOpen(true);
+    }
   });
 
-  $("syncDisconnectBtn").addEventListener("click", () => {
-    disconnectSync();
+  $("loginCancelBtn").addEventListener("click", () => {
+    setLoginModalOpen(false);
+  });
+
+  $("loginModal").addEventListener("click", (event) => {
+    if (event.target.dataset.closeLogin) {
+      setLoginModalOpen(false);
+    }
+  });
+
+  $("syncConnectBtn").addEventListener("click", () => {
+    connectSync();
   });
 
   $("syncKey").addEventListener("keydown", (event) => {
@@ -613,6 +711,10 @@ document.addEventListener("keydown", (event) => {
   }
   if (resetModalOpen) {
     setResetModalOpen(false);
+    return;
+  }
+  if (loginModalOpen) {
+    setLoginModalOpen(false);
   }
 });
 
@@ -622,8 +724,6 @@ render();
 if (sync.key) {
   updateSyncStatus("저장된 ID로 로그인 중...", "idle");
   connectSync();
-} else if (isFirebaseConfigured()) {
-  updateSyncStatus("ID를 입력하면 여러 기기에서 공유됩니다.", "idle");
-} else {
+} else if (!isFirebaseConfigured()) {
   updateSyncStatus("firebase-config.js 설정 후 로그인 가능", "warn");
 }

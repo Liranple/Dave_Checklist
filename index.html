@@ -9,32 +9,35 @@
 <body>
   <header>
     <div class="header-inner">
-      <h1>Dave the Diver Checklist</h1>
+      <div class="header-top">
+        <div class="brand">
+          <div class="brand-title">
+            <span class="brand-mark" aria-hidden="true">🐟</span>
+            <h1>Dave the Diver Checklist</h1>
+          </div>
+          <p class="brand-sub">물고기 도감 수집 체크리스트</p>
+        </div>
+        <button id="authBtn" type="button" class="auth-btn">로그인</button>
+      </div>
       <div class="toolbar">
-        <input id="search" placeholder="검색: 물고기 이름, 영어 이름, 지역">
+        <input id="search" placeholder="물고기 이름, 영어 이름, 지역">
         <div class="toolbar-select" id="areaFilterWrap">
           <button id="areaFilterTrigger" type="button" class="toolbar-select-trigger" aria-haspopup="menu" aria-expanded="false">전체 지역</button>
           <div id="areaFilterMenu" class="toolbar-select-menu" role="menu"></div>
         </div>
-        <button id="todoOnly">미완료만</button>
-        <button id="notMaxOnly">MAX 아님</button>
+        <button id="todoOnly">완료 숨기기</button>
+        <button id="notMaxOnly">MAX 숨기기</button>
         <button id="resetBtn">초기화</button>
-      </div>
-      <div class="syncbar">
-        <input id="syncKey" type="text" placeholder="ID">
-        <button id="syncConnectBtn" type="button">로그인</button>
-        <button id="syncDisconnectBtn" type="button" hidden>로그아웃</button>
-        <span id="syncStatus" class="sync-status">로그아웃 상태 · 이 기기에만 저장</span>
       </div>
     </div>
   </header>
 
   <main>
     <section class="summary">
-      <div class="stat">전체<br><b id="total">0</b></div>
-      <div class="stat">완료<br><b id="done">0</b></div>
-      <div class="stat">미완료<br><b id="todo">0</b></div>
-      <div class="stat">진행률<br><b id="rate">0%</b></div>
+      <div class="stat stat--total">전체<br><b id="total">0</b></div>
+      <div class="stat stat--done">완료<br><b id="done">0</b></div>
+      <div class="stat stat--todo">미완료<br><b id="todo">0</b></div>
+      <div class="stat stat--rate">진행률<br><b id="rate">0%</b></div>
     </section>
     <div id="app"></div>
   </main>
@@ -47,6 +50,20 @@
       <div class="modal-actions">
         <button id="resetCancelBtn" type="button" class="modal-btn">취소</button>
         <button id="resetConfirmBtn" type="button" class="modal-btn modal-btn-danger">초기화</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loginModal" class="modal-shell" hidden>
+    <div class="modal-backdrop" data-close-login="true"></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle">
+      <h2 id="loginModalTitle">로그인</h2>
+      <p>같은 ID로 로그인한 기기끼리 진행 기록이 동기화됩니다.</p>
+      <input id="syncKey" type="text" class="login-input" placeholder="ID" autocomplete="off">
+      <span id="syncStatus" class="sync-status" data-tone="idle"></span>
+      <div class="modal-actions">
+        <button id="loginCancelBtn" type="button" class="modal-btn" data-close-login="true">취소</button>
+        <button id="syncConnectBtn" type="button" class="modal-btn modal-btn-primary">로그인</button>
       </div>
     </div>
   </div>
