@@ -420,10 +420,22 @@ function navigateToDish(tab, key, area) {
   );
 }
 
+// 추가 출현 정보의 시간대(낮/밤/항상)를 텍스트 대신 시간대 아이콘(색상 포함)으로 표시.
+const ALSO_TIME_ICON = {
+  낮: { icon: ACTIVE_TIME_META.day.icon, color: "#ffe5a0" },
+  밤: { icon: ACTIVE_TIME_META.night.icon, color: "#d8e1ff" },
+  항상: { icon: ACTIVE_TIME_META.always.icon, color: "#d8f8ff" },
+};
+function alsoTimeIcon(time) {
+  const t = ALSO_TIME_ICON[time];
+  if (!t) return time; // 모르는 값이면 원문 텍스트 유지
+  return `<span class="also-time" style="color:${t.color}" aria-label="${time}">${t.icon}</span>`;
+}
+
 // 추가 출현 지역 배지: 원 안에 ! 아이콘(SVG). 호버/포커스 시 추가 지역·시간대를 알려준다.
 // 여러 지역에 나오는 물고기를 지역마다 중복 카드로 넣지 않고 한 카드에 표기하기 위함.
 function alsoInBadge(list) {
-  const lines = list.map((a) => `<span>${a.area} · ${a.time}</span>`).join("");
+  const lines = list.map((a) => `<span>${a.area} · ${alsoTimeIcon(a.time)}</span>`).join("");
   return (
     `<span class="also-badge" tabindex="0" aria-label="추가 출현 지역">` +
     `<svg class="also-ico" viewBox="0 0 20 20" aria-hidden="true">` +

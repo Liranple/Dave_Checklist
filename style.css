@@ -1464,6 +1464,22 @@ button.time-badge:hover {
   display: block;
   color: var(--muted);
   line-height: 1.5;
+  white-space: nowrap; /* 지역명 + 시간대 아이콘이 한 줄에 유지되도록 */
+}
+
+/* 추가 출현 시간대 아이콘: 텍스트와 같은 줄에 인라인으로.
+   (`.also-tip span{display:block}`보다 명시도를 높여 block이 되지 않게 한다) */
+.also-tip span.also-time {
+  display: inline-flex;
+  vertical-align: middle;
+  white-space: nowrap;
+  transform: translateY(-1px); /* 글자 기준선에 맞게 살짝 위로 */
+}
+
+.also-tip .also-time .time-ico {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .also-badge:hover .also-tip,
