@@ -5,7 +5,22 @@ service cloud.firestore {
     // 체크리스트 동기화 문서: Sync Key(문서 ID)를 아는 사람만 읽고 쓸 수 있음.
     // 인증 없이 동작하는 개인용 앱이므로, Sync Key 자체가 접근 비밀번호 역할을 함.
     match /checklists/{syncKey} {
-      allow read, write: if true;
+      // 읽기: 키를 아는 사람은 누구나 (앱 동작에 필요).
+      allow read: if true;
+
+      // 쓰기(생성/수정): 앱이 실제로 쓰는 형태({state, modifiedAt, updatedAtIso})와
+      // 크기만 허용한다. 이렇게 해두면 이 컬렉션을 임의 데이터 저장소처럼 남용하거나
+      // 비정상적으로 큰 문서를 밀어넣는 것을 막는다.
+      allow create, update: if
+        request.resource.data.keys().hasOnly(['state', 'modifiedAt', 'updatedAtIso']) &&
+        request.resource.data.state is map &&
+        request.resource.data.state.size() <= 5000 &&
+        request.resource.data.modifiedAt is number &&
+        (!('updatedAtIso' in request.resource.data) || request.resource.data.updatedAtIso is string);
+
+      // 삭제는 허용하지 않는다(앱은 문서를 지우지 않고 빈 state로 덮어쓰기만 함).
+      // → 키를 아는 제3자가 문서를 통째로 삭제하는 것을 방지.
+      allow delete: if false;
     }
 
     // 그 외 모든 경로는 차단

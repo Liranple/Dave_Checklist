@@ -1644,10 +1644,12 @@ button.time-badge:hover {
 }
 
 .reset-list li::before {
-  content: "·";
-  font-size: 30px;
-  line-height: 0;
-  color: var(--accent);
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .modal-actions {

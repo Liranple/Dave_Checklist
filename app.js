@@ -115,9 +115,13 @@ function normalizeEntry(entry, fallbackRank = "1") {
 }
 
 function normalizeRank(rank) {
-  if (rank === "99") return "9";
-  if (rank === "M") return "MAX";
-  return String(rank || "1");
+  let value = String(rank ?? "1");
+  if (value === "99") value = "9";
+  if (value === "M") value = "MAX";
+  // 랭크는 반드시 정해진 값 중 하나여야 한다. 그 외(원격 동기화로 들어온 조작된
+  // 문자열 등)는 "1"로 되돌려, 랭크 값이 그대로 innerHTML에 삽입되며 생길 수 있는
+  // XSS를 원천 차단한다.
+  return RANKS.includes(value) ? value : "1";
 }
 
 function normalizeState(rawState) {
