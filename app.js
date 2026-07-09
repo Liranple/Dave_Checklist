@@ -38,6 +38,14 @@ const ACTIVE_TIME_META = {
 const AREA_ALL_VALUE = "";
 const AREA_OPTIONS = [AREA_ALL_VALUE, ...new Set(FISH_DATA.map((fish) => fish.area))];
 
+// 정렬 옵션(각 섹션 내에서만 적용). 이름/랭크 × 오름차순/내림차순.
+const SORT_OPTIONS = [
+  { value: "name-asc", label: "이름 가나다 순" },
+  { value: "name-desc", label: "이름 가나다 역순" },
+  { value: "rank-asc", label: "랭크 낮은 순" },
+  { value: "rank-desc", label: "랭크 높은 순" },
+];
+
 const localStore = loadLocalStore();
 
 let state = localStore.state;
@@ -46,6 +54,8 @@ let stateModifiedAt = localStore.modifiedAt;
 // 키를 바꿔 연결할 때 서로 다른 키의 데이터가 섞이는 것을 막는 데 사용.
 let stateOwnerKey = localStore.ownerKey;
 let filters = { q: "", area: "", notMax: false, activeTime: "", party: "" };
+// 정렬 기준(각 섹션 내부에서만 적용). 기본은 이름 오름차순.
+let sortBy = "name-asc";
 // 사이드바 탭: "fish"(물고기) | "cook"(요리) | "sushi"(초밥)
 let activeTab = "fish";
 // 물고기 카드 클릭 시 그 아래에 "이 물고기로 만드는 요리/초밥" 목록을 펼친다.
@@ -56,6 +66,7 @@ let openDishFishKey = null;
 let stopWheelScroll = () => {};
 let openRankKey = null;
 let areaMenuOpen = false;
+let sortMenuOpen = false;
 let resetModalOpen = false;
 let loginModalOpen = false;
 // 사용자가 접어둔 지역 이름 모음. 재렌더링(체크 등)에도 접힘 상태를 유지하기 위해 사용.
@@ -348,12 +359,17 @@ function attachDishDropdown(key) {
       dd.innerHTML = '<div class="dish-empty">이 물고기를 재료로 쓰는 요리 · 초밥이 없습니다</div>';
     } else {
       dd.innerHTML = dishes
-        .map(
-          (d, i) =>
+        .map((d, i) => {
+          // 각 요리/초밥에 내가 설정한 랭크를 오른쪽에 함께 표시(읽기 전용). MAX면 색 강조.
+          const item = state[d.key] || getDefaultItem();
+          const isMax = item.rank === "MAX";
+          return (
             `<button type="button" class="dish-chip" data-tab="${d.tab}" data-key="${d.key}" data-area="${d.area}" style="animation-delay:${(i * 0.04).toFixed(3)}s">` +
             `<span class="dish-chip-ico">${d.icon ? `<img src="${d.icon}" alt="">` : "?"}</span>` +
-            `<span class="dish-chip-name">${d.name}</span></button>`,
-        )
+            `<span class="dish-chip-name">${d.name}</span>` +
+            `<span class="dish-chip-rank${isMax ? " max" : ""}">Rank ${getRankLabel(item.rank)}</span></button>`
+          );
+        })
         .join("");
       dd.querySelectorAll(".dish-chip").forEach((chip) => {
         chip.addEventListener("click", (event) => {
@@ -470,6 +486,55 @@ function renderAreaMenu() {
       event.stopPropagation();
       filters.area = button.dataset.areaValue;
       setAreaMenuOpen(false);
+      render();
+    });
+  });
+}
+
+// 랭크의 정렬 순서값. 낮은 랭크 → 높은 랭크(MAX) 순서.
+function rankOrder(rank) {
+  const i = RANKS.indexOf(normalizeRank(rank));
+  return i === -1 ? 0 : i;
+}
+
+// 섹션 내부 목록을 현재 정렬 기준(sortBy)으로 정렬한다(원본은 건드리지 않고 새 배열 반환).
+function sortSection(list) {
+  const desc = sortBy.endsWith("-desc");
+  const dir = desc ? -1 : 1;
+  const byRank = sortBy.startsWith("rank");
+  return list.slice().sort((a, b) => {
+    if (byRank) {
+      const diff = rankOrder(getItem(a).rank) - rankOrder(getItem(b).rank);
+      if (diff !== 0) return diff * dir;
+      // 랭크가 같으면 이름 오름차순으로 안정적으로 정렬한다.
+      return a.name.localeCompare(b.name, "ko");
+    }
+    return a.name.localeCompare(b.name, "ko") * dir;
+  });
+}
+
+function getSortLabel(value) {
+  return (SORT_OPTIONS.find((o) => o.value === value) || SORT_OPTIONS[0]).label;
+}
+
+function setSortMenuOpen(open) {
+  sortMenuOpen = open;
+  $("sortWrap").classList.toggle("open", open);
+  $("sortTrigger").setAttribute("aria-expanded", String(open));
+}
+
+function renderSortMenu() {
+  $("sortTrigger").textContent = getSortLabel(sortBy);
+  $("sortMenu").innerHTML = SORT_OPTIONS.map((opt) => {
+    const selected = opt.value === sortBy;
+    return `<button type="button" class="toolbar-select-option${selected ? " selected" : ""}" data-sort-value="${opt.value}" role="menuitemradio" aria-checked="${selected}">${opt.label}</button>`;
+  }).join("");
+
+  $("sortMenu").querySelectorAll(".toolbar-select-option").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      sortBy = button.dataset.sortValue;
+      setSortMenuOpen(false);
       render();
     });
   });
@@ -659,7 +724,8 @@ function renderRecipeTab(data, emptyMsg, applyArea, modClass) {
     (byArea[r.area] ||= []).push(r);
   });
 
-  Object.entries(byArea).forEach(([area, list]) => {
+  Object.entries(byArea).forEach(([area, unsortedList]) => {
+    const list = sortSection(unsortedList);
     const section = document.createElement("section");
     section.className = "area";
 
@@ -767,6 +833,7 @@ function renderRecipeTab(data, emptyMsg, applyArea, modClass) {
 function render() {
   renderSummary();
   renderAreaMenu();
+  renderSortMenu();
 
   const app = $("app");
   app.innerHTML = "";
@@ -795,9 +862,9 @@ function render() {
     (byArea[fish.area] ||= []).push(fish);
   });
 
-  Object.entries(byArea).forEach(([area, list]) => {
-    // 섹션 순서는 원본(FISH_DATA) 순서를 유지하고, 섹션 안 물고기만 한글(가나다)로 정렬한다.
-    list.sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  Object.entries(byArea).forEach(([area, unsortedList]) => {
+    // 섹션 순서는 원본(FISH_DATA) 순서를 유지하고, 섹션 안 물고기만 현재 정렬 기준으로 정렬한다.
+    const list = sortSection(unsortedList);
 
     const section = document.createElement("section");
     section.className = "area";
@@ -822,6 +889,8 @@ function render() {
       const isMaxRank = item.rank === "MAX";
       const isBoss = fish.rank === "99";
       const isTank = Boolean(item.tank);
+      // 해마·해룡은 수족관에 넣을 수 없으므로 Aqua 버튼을 표시하지 않는다.
+      const noAqua = fish.name.includes("해마") || fish.name.includes("해룡");
       const timeKey = fish.activeTime || "always";
       const activeTime = ACTIVE_TIME_META[timeKey] || ACTIVE_TIME_META.always;
       // 낮·밤 배지는 클릭 필터로 동작한다. 항상 배지는 상호작용이 없다.
@@ -857,7 +926,7 @@ function render() {
         `<button type="button" class="rank-trigger" aria-haspopup="menu" aria-expanded="${isRankOpen}" aria-label="${fish.name} 랭크 ${item.rank}">Rank ${getRankLabel(item.rank)}</button>` +
         `${isRankOpen ? `<span class="rank-menu" role="menu">${rankOptions}</span>` : ""}` +
         `</span>` +
-        (isBoss
+        (isBoss || noAqua
           ? ""
           : `<button type="button" class="tank-toggle ${isTank ? "active" : ""}" aria-pressed="${isTank}" aria-label="${isTank ? "수족관 등록됨" : "수족관 등록 안 됨"}">` +
             `<span class="tank-toggle-dot"></span><span class="tank-toggle-text">Aqua</span></button>`) +
@@ -1159,6 +1228,7 @@ function scheduleRemoteSave() {
 
 function initFilters() {
   renderAreaMenu();
+  renderSortMenu();
   renderSyncControls();
 
   document.querySelectorAll(".side-tab").forEach((btn) => {
@@ -1176,6 +1246,13 @@ function initFilters() {
   });
 
   $("areaFilterMenu").addEventListener("click", (event) => event.stopPropagation());
+
+  $("sortTrigger").addEventListener("click", (event) => {
+    event.stopPropagation();
+    setSortMenuOpen(!sortMenuOpen);
+  });
+
+  $("sortMenu").addEventListener("click", (event) => event.stopPropagation());
 
   $("notMaxOnly").addEventListener("click", () => {
     filters.notMax = !filters.notMax;
@@ -1243,6 +1320,9 @@ document.addEventListener("click", (event) => {
   if (areaMenuOpen) {
     setAreaMenuOpen(false);
   }
+  if (sortMenuOpen) {
+    setSortMenuOpen(false);
+  }
   // 카드 바깥을 클릭하면 요리 목록 드롭다운을 닫는다.
   if (openDishFishKey && !event.target.closest(".card")) {
     openDishFishKey = null;
@@ -1260,6 +1340,10 @@ document.addEventListener("keydown", (event) => {
   }
   if (areaMenuOpen) {
     setAreaMenuOpen(false);
+    return;
+  }
+  if (sortMenuOpen) {
+    setSortMenuOpen(false);
     return;
   }
   if (resetModalOpen) {
@@ -1294,12 +1378,16 @@ if (sync.key) {
   function step() {
     const cur = window.scrollY;
     const diff = target - cur;
-    if (Math.abs(diff) < 0.5) {
+    // 1px 이내면 목표로 딱 붙인다(브라우저가 스크롤 위치를 정수 픽셀로 반올림해도 끝까지 도달).
+    if (Math.abs(diff) <= 1) {
       window.scrollTo(0, target);
       raf = null;
       return;
     }
-    window.scrollTo(0, cur + diff * EASE);
+    // 남은 거리의 EASE 비율만큼, 단 최소 1px은 이동한다. 목표 근처에서 이동량이 0.5px 밑으로
+    // 떨어지면 반올림에 먹혀 몇 px 못 미친 채 멈추던 문제를 막는다.
+    const stepAmt = Math.sign(diff) * Math.max(1, Math.abs(diff) * EASE);
+    window.scrollTo(0, cur + stepAmt);
     raf = requestAnimationFrame(step);
   }
 

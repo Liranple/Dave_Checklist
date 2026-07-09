@@ -381,7 +381,7 @@ h1 {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(180px, 260px) auto auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(140px, 200px) minmax(160px, 240px) auto auto;
   gap: 10px;
   align-items: center;
 }
@@ -880,6 +880,24 @@ summary b {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.25;
+}
+
+/* 요리 목록의 랭크(읽기 전용): 오른쪽 정렬. 공간이 협소해 테두리·배경 없이 글씨만. MAX면 초록으로 강조. */
+.dish-chip-rank {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  color: #ffe6a4;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dish-chip-rank.max {
+  color: #8bf2a0;
 }
 
 .dish-empty {
